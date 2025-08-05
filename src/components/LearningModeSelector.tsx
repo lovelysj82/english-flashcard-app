@@ -1,6 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageCircle, Mic, BookOpen } from "lucide-react";
+import { MessageCircle, Mic } from "lucide-react";
 
 export type LearningMode = 'sentence-completion' | 'speaking';
 
@@ -10,72 +9,54 @@ interface LearningModeSelectorProps {
 
 export function LearningModeSelector({ onSelectMode }: LearningModeSelectorProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl">
-        <div className="text-center mb-12">
-          <div className="flex items-center justify-center gap-3 mb-6">
-            <div className="w-12 h-12 bg-gradient-to-r from-learning-primary to-primary-glow rounded-xl flex items-center justify-center">
-              <BookOpen className="w-6 h-6 text-white" />
-            </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-learning-primary to-primary-glow bg-clip-text text-transparent">
-              Phrase Builder Pro
-            </h1>
-          </div>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            레벨별 영어 표현 학습 시스템으로 체계적인 영어 문장 완성과 말하기 연습을 해보세요
-          </p>
+    <div className="min-h-screen bg-background flex flex-col justify-center p-4">
+      <div className="w-full max-w-sm mx-auto">
+        {/* 앱 제목 */}
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold text-foreground mb-2">
+            Blabla EN
+          </h1>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-          <Card className="group hover:shadow-xl transition-all duration-300 border-2 hover:border-primary/30 cursor-pointer overflow-hidden">
-            <CardHeader className="pb-4">
-              <div className="w-16 h-16 bg-gradient-to-r from-learning-primary to-primary-glow rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                <MessageCircle className="w-8 h-8 text-white" />
-              </div>
-              <CardTitle className="text-2xl">문장 완성 모드</CardTitle>
-              <CardDescription className="text-base">
-                단어 버튼을 클릭하여 올바른 순서로 영어 문장을 완성하세요
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                variant="default" 
-                size="lg" 
-                className="w-full mt-6 bg-blue-600 hover:bg-blue-700 text-white"
-                onClick={() => {
-                  console.log('문장완성 버튼 클릭됨');
-                  onSelectMode('sentence-completion');
-                }}
-              >
-                문장 완성 시작하기
-              </Button>
-            </CardContent>
-          </Card>
+        {/* 학습 모드 선택 */}
+        <div className="space-y-4">
+          {/* 문장 완성 모드 */}
+          <Button 
+            variant="outline" 
+            size="lg" 
+            className="w-full h-16 flex items-center justify-start gap-4 text-left bg-blue-50 hover:bg-blue-100 border-blue-200"
+            onClick={() => {
+              console.log('문장완성 버튼 클릭됨');
+              onSelectMode('sentence-completion');
+            }}
+          >
+            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+              <MessageCircle className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <div className="font-semibold text-blue-900">문장 완성</div>
+              <div className="text-sm text-blue-600">단어를 조합해서 문장 만들기</div>
+            </div>
+          </Button>
 
-          <Card className="group hover:shadow-xl transition-all duration-300 border-2 hover:border-primary/30 cursor-pointer overflow-hidden">
-            <CardHeader className="pb-4">
-              <div className="w-16 h-16 bg-gradient-to-r from-learning-secondary to-success rounded-2xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                <Mic className="w-8 h-8 text-white" />
-              </div>
-              <CardTitle className="text-2xl">말하기 모드</CardTitle>
-              <CardDescription className="text-base">
-                마이크를 사용하여 영어 문장을 직접 말해보고 연습하세요
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                variant="default" 
-                size="lg" 
-                className="w-full mt-6 bg-green-600 hover:bg-green-700 text-white"
-                onClick={() => {
-                  console.log('말하기 버튼 클릭됨');
-                  onSelectMode('speaking');
-                }}
-              >
-                말하기 연습 시작하기
-              </Button>
-            </CardContent>
-          </Card>
+          {/* 말하기 모드 */}
+          <Button 
+            variant="outline" 
+            size="lg" 
+            className="w-full h-16 flex items-center justify-start gap-4 text-left bg-green-50 hover:bg-green-100 border-green-200"
+            onClick={() => {
+              console.log('말하기 버튼 클릭됨');
+              onSelectMode('speaking');
+            }}
+          >
+            <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center">
+              <Mic className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <div className="font-semibold text-green-900">말하기 연습</div>
+              <div className="text-sm text-green-600">마이크로 발음 연습하기</div>
+            </div>
+          </Button>
         </div>
       </div>
     </div>

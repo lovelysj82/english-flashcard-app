@@ -523,231 +523,141 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
     : 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <Button variant="ghost" onClick={onBack}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            뒤로가기
-          </Button>
-          <div className="flex items-center gap-4">
-            <Badge variant="outline" className="text-lg px-4 py-2">
-              레벨 {currentLevel}
-            </Badge>
-            {isReviewMode && (
-              <Badge variant="destructive">복습 모드</Badge>
+    <div className="min-h-screen bg-background flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between p-4 border-b">
+        <Button variant="ghost" size="icon" onClick={onBack}>
+          <ArrowLeft className="w-5 h-5" />
+        </Button>
+        <div className="flex-1 mx-4">
+          <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-green-500 transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+        </div>
+        <span className="text-sm font-medium text-gray-600">
+          {currentSentenceIndex + 1}/{currentSentenceList.length}
+        </span>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col justify-center p-4 max-w-md mx-auto w-full">
+        {/* Korean Sentence */}
+        <div className="text-center mb-8">
+          <p className="text-lg font-medium text-gray-800 mb-4">
+            다음 문장을 영어로 번역하세요
+          </p>
+          <p className="text-xl font-semibold">
+            {currentSentence.koreanSentence}
+          </p>
+        </div>
+
+        {/* English Answer Area with Underlines */}
+        <div className="mb-8">
+          <div className="flex flex-wrap gap-2 justify-center min-h-[3rem] items-end">
+            {selectedWords.length > 0 ? (
+              selectedWords.map((word, index) => (
+                <div key={index} className="flex items-center">
+                  <span className="text-xl font-medium text-gray-800 px-1">
+                    {word}
+                  </span>
+                  {index < selectedWords.length - 1 && (
+                    <span className="text-xl text-gray-800 mx-1"> </span>
+                  )}
+                </div>
+              ))
+            ) : (
+              // Duolingo 스타일 밑줄 표시
+              <div className="flex flex-wrap gap-3 justify-center">
+                {Array.from({ length: parseEnglishSentence(currentSentence.englishSentence).length }).map((_, index) => (
+                  <div key={index} className="border-b-2 border-gray-400 min-w-[60px] h-8"></div>
+                ))}
+              </div>
             )}
           </div>
         </div>
 
-        {/* Progress */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium">진행률</span>
-              <span className="text-sm text-muted-foreground">
-                {currentSentenceIndex + 1} / {currentSentenceList.length}
-                {isReviewMode && <span className="text-red-600 ml-2">(복습)</span>}
+        {/* Word Selection Buttons */}
+        <div className="flex flex-wrap gap-3 justify-center mb-8">
+          {allWords.map((word, index) => {
+            const isSelected = selectedIndices.includes(index);
+            return (
+              <Button
+                key={index}
+                variant={isSelected ? "ghost" : "outline"}
+                onClick={() => !isSelected && handleWordClick(word, index)}
+                className={`text-base px-4 py-2 min-h-[44px] ${
+                  isSelected 
+                    ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed" 
+                    : "bg-white border-gray-300 hover:bg-gray-50"
+                }`}
+                disabled={isSelected}
+              >
+                {word}
+              </Button>
+            );
+          })}
+        </div>
+
+        {/* Result Display */}
+        {showResult && (
+          <div className={`mb-6 p-4 rounded-xl text-center ${
+            isCorrect 
+              ? 'bg-green-100 border-2 border-green-300' 
+              : 'bg-red-100 border-2 border-red-300'
+          }`}>
+            <div className="flex items-center justify-center gap-2 mb-2">
+              {isCorrect ? (
+                <CheckCircle className="w-6 h-6 text-green-600" />
+              ) : (
+                <XCircle className="w-6 h-6 text-red-600" />
+              )}
+              <span className={`font-bold text-lg ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
+                {isCorrect ? '잘했어요!' : '정답이 아니에요'}
               </span>
             </div>
-            <Progress value={progress} className="h-2" />
-          </CardContent>
-        </Card>
-
-        {/* Main Learning Card */}
-        <Card className="mb-6">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xl">문장 완성</CardTitle>
-              <div className="flex items-center gap-2">
-                <Badge variant="outline">{currentSentence.category}</Badge>
+            
+            {!isCorrect && (
+              <div className="flex items-center justify-center gap-3 mt-3">
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => speakText(currentSentence.englishSentence)}
-                  className="h-12 w-12"
+                  className="h-10 w-10"
                 >
-                  <Volume2 className="w-6 h-6" />
+                  <Volume2 className="w-5 h-5" />
                 </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Korean Sentence */}
-            <div className="text-center p-6 bg-muted/50 rounded-lg">
-              <p className="text-xl font-medium text-foreground">
-                {currentSentence.koreanSentence}
-              </p>
-            </div>
-
-            {/* Selected Words */}
-            <div 
-              className="min-h-[4rem] p-4 border-2 border-dashed border-primary/30 rounded-lg bg-primary/5"
-              onDragOver={handleDragOver}
-              onDrop={handleContainerDrop}
-            >
-              <div className="flex flex-wrap gap-3">
-                {selectedWords.map((word, index) => (
-                  <div key={index} className="flex items-center">
-                    {/* 앞쪽 드롭 영역 */}
-                    <div
-                      className="w-6 h-full min-h-[2.5rem] flex items-center justify-center opacity-0 hover:opacity-30 transition-opacity"
-                      onDragOver={handleDragOver}
-                      onDrop={(e) => handleDrop(e, index)}
-                      style={{ 
-                        backgroundColor: draggedIndex !== null ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                        borderRadius: '4px'
-                      }}
-                    >
-                      <div className="w-1 h-8 bg-blue-400 rounded-full"></div>
-                    </div>
-                    
-                    {/* 단어 버튼 */}
-                    <Button
-                      variant="wordSelected"
-                      onClick={() => handleSelectedWordClick(index)}
-                      className="text-base cursor-move mx-1"
-                      draggable
-                      onDragStart={() => handleDragStart(index)}
-                      onDragEnd={handleDragEnd}
-                      style={{
-                        opacity: draggedIndex === index ? 0.5 : 1
-                      }}
-                    >
-                      {word}
-                    </Button>
-                    
-                    {/* 뒤쪽 드롭 영역 (마지막 단어인 경우) */}
-                    {index === selectedWords.length - 1 && (
-                      <div
-                        className="w-6 h-full min-h-[2.5rem] flex items-center justify-center opacity-0 hover:opacity-30 transition-opacity"
-                        onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, index + 1)}
-                        style={{ 
-                          backgroundColor: draggedIndex !== null ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                          borderRadius: '4px'
-                        }}
-                      >
-                        <div className="w-1 h-8 bg-blue-400 rounded-full"></div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-                {selectedWords.length === 0 && (
-                  <p className="text-muted-foreground text-center w-full py-4">
-                    아래 단어들을 클릭하여 영어 문장을 완성하세요
-                    <br />
-                    <small>선택된 단어는 드래그해서 순서를 바꿀 수 있습니다</small>
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Available Words - 고정 레이아웃 */}
-            <div className="flex flex-wrap gap-3 justify-center">
-              {allWords.map((word, index) => {
-                const isSelected = selectedIndices.includes(index);
-                return (
-                  <Button
-                    key={index}
-                    variant={isSelected ? "ghost" : "word"}
-                    onClick={() => !isSelected && handleWordClick(word, index)}
-                    className={`text-base transition-all duration-200 ${
-                      isSelected 
-                        ? "bg-white text-white border-white cursor-not-allowed opacity-90 hover:bg-white hover:text-white" 
-                        : "hover:scale-105"
-                    }`}
-                    disabled={isSelected}
-                  >
-                    {word}
-                  </Button>
-                );
-              })}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-3 justify-center">
-              <Button variant="outline" onClick={handleReset}>
-                <RotateCcw className="w-4 h-4 mr-2" />
-                다시하기
-              </Button>
-              
-              {/* 확인/다음 문제 버튼을 같은 자리에 배치 */}
-              {!showResult ? (
-                <Button 
-                  onClick={handleCheck} 
-                  disabled={selectedWords.length === 0}
-                  variant="hero"
-                  size="lg"
-                >
-                  확인
-                </Button>
-              ) : (
-                <Button 
-                  onClick={levelCompleted ? onBack : handleNext} 
-                  variant="hero"
-                  size="lg"
-                >
-                  {levelCompleted ? '레벨 선택으로 돌아가기' : '다음 문제'}
-                </Button>
-              )}
-            </div>
-
-            {/* Result */}
-            {showResult && (
-              <div className={`p-4 rounded-lg border-2 ${
-                isCorrect 
-                  ? 'bg-green-50 border-green-200 text-green-800' 
-                  : 'bg-red-50 border-red-200 text-red-800'
-              }`}>
-                <div className="flex items-center gap-2 mb-2">
-                  {isCorrect ? (
-                    <CheckCircle className="w-5 h-5 text-green-600" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-red-600" />
-                  )}
-                  <span className="font-medium text-gray-800">
-                    {isCorrect ? '정답입니다!' : '틀렸습니다'}
-                  </span>
-                </div>
-                
-                {!isCorrect && (
-                  <div className="mb-3">
-                    <p className="text-sm text-gray-600 mb-1">정답:</p>
-                    <div className="flex items-center gap-3">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => speakText(currentSentence.englishSentence)}
-                        className="h-12 w-12"
-                      >
-                        <Volume2 className="w-6 h-6" />
-                      </Button>
-                      <p className="text-2xl font-semibold text-gray-800">{currentSentence.englishSentence}</p>
-                    </div>
-                  </div>
-                )}
-                
-                {isCorrect && (
-                  <div className="mb-3">
-                    <div className="flex items-center justify-center gap-3">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => speakText(currentSentence.englishSentence)}
-                        className="h-12 w-12"
-                      >
-                        <Volume2 className="w-6 h-6" />
-                      </Button>
-                      <p className="text-2xl font-semibold text-gray-800">{currentSentence.englishSentence}</p>
-                    </div>
-                  </div>
-                )}
+                <p className="text-lg font-medium text-gray-800">{currentSentence.englishSentence}</p>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Button */}
+      <div className="p-4">
+        {!showResult ? (
+          <Button 
+            onClick={handleCheck} 
+            disabled={selectedWords.length === 0}
+            className={`w-full py-4 text-lg font-bold transition-all ${
+              selectedWords.length === 0
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                : 'bg-green-500 hover:bg-green-600 text-white'
+            }`}
+          >
+            확인
+          </Button>
+        ) : (
+          <Button 
+            onClick={levelCompleted ? onBack : handleNext} 
+            className="w-full py-4 text-lg font-bold bg-green-500 hover:bg-green-600 text-white"
+          >
+            {levelCompleted ? '완료' : '계속'}
+          </Button>
+        )}
       </div>
     </div>
   );
