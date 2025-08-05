@@ -448,15 +448,9 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         console.log(`=== 디버깅 끝 ===`);
         
         if (hasNextLevel) {
-          // toast({
-            title: "레벨 완료!",
-            description: `레벨 ${currentLevel}을 완료했습니다!`,
-          });
+          // 레벨 완료 처리
         } else {
-          // toast({
-            title: "모든 레벨 완료!",
-            description: `축하합니다! 모든 학습을 완료했습니다.`,
-          });
+          // 모든 레벨 완료 처리
         }
       } else if (wrongAnswers.size === 0) {
         // 첫 번째 학습 완료 (복습 모드가 아닌 경우)
@@ -477,15 +471,9 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         console.log(`=== 복습 디버깅 끝 ===`);
         
         if (hasNextLevel) {
-          // toast({
-            title: "레벨 완료!",
-            description: `레벨 ${currentLevel}을 완료했습니다!`,
-          });
+          // 레벨 완료 처리
         } else {
-          // toast({
-            title: "모든 레벨 완료!",
-            description: `축하합니다! 모든 학습을 완료했습니다.`,
-          });
+          // 모든 레벨 완료 처리
         }
       } else {
         // 복습 모드에서 마지막 문제까지 완료했을 때
@@ -499,10 +487,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
           // 아직 틀린 문제가 있음 - 복습 모드를 처음부터 다시 시작
           console.log(`복습 모드 재시작 - 틀린 문제 ${wrongAnswers.size}개`);
           setCurrentSentenceIndex(0);
-          // toast({
-            title: "복습 계속",
-            description: `아직 틀린 문제 ${wrongAnswers.size}개가 있습니다. 다시 풀어보세요.`,
-          });
+          // 복습 계속 처리
         }
       }
     }
@@ -524,12 +509,60 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
     }
   };
 
+  // TTS 발음 개선을 위한 텍스트 전처리 함수
+  const preprocessForTTS = (text: string): string => {
+    let processedText = text;
+    
+    // 1. "I'm a" → "I'm an" (모음 앞에서 자연스러운 부정관사)
+    processedText = processedText.replace(/\ba\s+(?=[aeiouAEIOU])/g, 'an ');
+    
+    // 2. "the" 발음 개선 (모음 앞에서 "디" 발음)
+    // the apple → thee apple (TTS가 "디" 발음하도록)
+    processedText = processedText.replace(/\bthe\s+(?=[aeiouAEIOU])/gi, 'thee ');
+    
+    // 3. 자주 틀리는 발음 교정
+    processedText = processedText.replace(/\bI'm a student\b/gi, 'I\'m uh student');
+    
+    return processedText;
+  };
+
   const speakText = (text: string) => {
     if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-US';
-      utterance.rate = 0.8;
-      speechSynthesis.speak(utterance);
+      // 안드로이드 호환성을 위해 기존 음성 취소
+      speechSynthesis.cancel();
+      
+      setTimeout(() => {
+        // 발음 개선을 위한 전처리
+        const processedText = preprocessForTTS(text);
+        console.log(`TTS 원본: "${text}" → 처리됨: "${processedText}"`);
+        
+        const utterance = new SpeechSynthesisUtterance(processedText);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.8;
+        
+        // 안드로이드에서 더 자연스러운 발음을 위한 설정
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        
+        // 안드로이드 Chrome 호환성 개선
+        utterance.onstart = () => {
+          console.log('TTS 시작');
+        };
+        
+        utterance.onend = () => {
+          console.log('TTS 완료');
+        };
+        
+        utterance.onerror = (event) => {
+          console.error('TTS 오류:', event.error);
+          // 오류 시 재시도
+          setTimeout(() => {
+            speechSynthesis.speak(utterance);
+          }, 100);
+        };
+        
+        speechSynthesis.speak(utterance);
+      }, 100); // 안드로이드에서 안정성을 위한 지연
     }
   };
 

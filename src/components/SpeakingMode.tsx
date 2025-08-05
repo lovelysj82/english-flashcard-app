@@ -479,12 +479,60 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
     setShowResult(false);
   };
 
+  // TTS 발음 개선을 위한 텍스트 전처리 함수
+  const preprocessForTTS = (text: string): string => {
+    let processedText = text;
+    
+    // 1. "I'm a" → "I'm an" (모음 앞에서 자연스러운 부정관사)
+    processedText = processedText.replace(/\ba\s+(?=[aeiouAEIOU])/g, 'an ');
+    
+    // 2. "the" 발음 개선 (모음 앞에서 "디" 발음)
+    // the apple → thee apple (TTS가 "디" 발음하도록)
+    processedText = processedText.replace(/\bthe\s+(?=[aeiouAEIOU])/gi, 'thee ');
+    
+    // 3. 자주 틀리는 발음 교정
+    processedText = processedText.replace(/\bI'm a student\b/gi, 'I\'m uh student');
+    
+    return processedText;
+  };
+
   const speakText = (text: string) => {
     if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-US';
-      utterance.rate = 0.8;
-      speechSynthesis.speak(utterance);
+      // 안드로이드 호환성을 위해 기존 음성 취소
+      speechSynthesis.cancel();
+      
+      setTimeout(() => {
+        // 발음 개선을 위한 전처리
+        const processedText = preprocessForTTS(text);
+        console.log(`TTS 원본: "${text}" → 처리됨: "${processedText}"`);
+        
+        const utterance = new SpeechSynthesisUtterance(processedText);
+        utterance.lang = 'en-US';
+        utterance.rate = 0.8;
+        
+        // 안드로이드에서 더 자연스러운 발음을 위한 설정
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        
+        // 안드로이드 Chrome 호환성 개선
+        utterance.onstart = () => {
+          console.log('TTS 시작');
+        };
+        
+        utterance.onend = () => {
+          console.log('TTS 완료');
+        };
+        
+        utterance.onerror = (event) => {
+          console.error('TTS 오류:', event.error);
+          // 오류 시 재시도
+          setTimeout(() => {
+            speechSynthesis.speak(utterance);
+          }, 100);
+        };
+        
+        speechSynthesis.speak(utterance);
+      }, 100); // 안드로이드에서 안정성을 위한 지연
     }
   };
 
