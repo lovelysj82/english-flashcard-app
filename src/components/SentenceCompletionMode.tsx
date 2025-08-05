@@ -156,36 +156,71 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
     }
   };
 
-  // 드래그 앤 드롭 함수들
+  // 드래그 앤 드롭 및 터치 이벤트 처리
+  const [touchStartPos, setTouchStartPos] = useState<{x: number, y: number} | null>(null);
+
   const handleDragStart = (index: number) => {
+    console.log(`드래그 시작: index=${index}`);
     setDraggedIndex(index);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent, index: number) => {
+    const touch = e.touches[0];
+    setTouchStartPos({ x: touch.clientX, y: touch.clientY });
+    setDraggedIndex(index);
+    console.log(`터치 시작: index=${index}`);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    e.preventDefault(); // 스크롤 방지
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (draggedIndex === null || !touchStartPos) return;
+
+    const touch = e.changedTouches[0];
+    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    
+    // 드롭 대상 찾기
+    let dropTarget = element;
+    let targetIndex = -1;
+    
+    while (dropTarget && targetIndex === -1) {
+      const dropIndex = dropTarget.getAttribute('data-drop-index');
+      if (dropIndex !== null) {
+        targetIndex = parseInt(dropIndex);
+        break;
+      }
+      dropTarget = dropTarget.parentElement;
+    }
+    
+    if (targetIndex !== -1) {
+      console.log(`터치 드롭: draggedIndex=${draggedIndex}, targetIndex=${targetIndex}`);
+      moveWord(draggedIndex, targetIndex);
+    }
+    
+    setDraggedIndex(null);
+    setTouchStartPos(null);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
   };
 
-  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
-    e.preventDefault();
-    e.stopPropagation(); // 이벤트 버블링 중단
-    
-    if (draggedIndex === null) return;
-    
-    console.log(`드래그 앤 드롭: draggedIndex=${draggedIndex}, targetIndex=${targetIndex}`);
-    
+  const moveWord = (fromIndex: number, targetIndex: number) => {
     const newSelectedWords = [...selectedWords];
     const newSelectedIndices = [...selectedIndices];
     
     // 드래그된 아이템을 타겟 위치로 이동
-    const draggedWord = newSelectedWords[draggedIndex];
-    const draggedOriginalIndex = newSelectedIndices[draggedIndex];
+    const draggedWord = newSelectedWords[fromIndex];
+    const draggedOriginalIndex = newSelectedIndices[fromIndex];
     
     // 먼저 드래그된 아이템 제거
-    newSelectedWords.splice(draggedIndex, 1);
-    newSelectedIndices.splice(draggedIndex, 1);
+    newSelectedWords.splice(fromIndex, 1);
+    newSelectedIndices.splice(fromIndex, 1);
     
     // 삽입 위치 조정: 드래그된 아이템이 타겟보다 앞에 있었다면 타겟 인덱스를 1 줄임
-    const adjustedTargetIndex = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+    const adjustedTargetIndex = fromIndex < targetIndex ? targetIndex - 1 : targetIndex;
     
     console.log(`조정된 타겟 인덱스: ${adjustedTargetIndex}`);
     
@@ -197,18 +232,26 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
     
     setSelectedWords(newSelectedWords);
     setSelectedIndices(newSelectedIndices);
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (draggedIndex === null) return;
+    
+    console.log(`마우스 드롭: draggedIndex=${draggedIndex}, targetIndex=${targetIndex}`);
+    moveWord(draggedIndex, targetIndex);
     setDraggedIndex(null);
   };
 
-  // 컨테이너 영역에서의 드롭 처리 (마지막 위치에 추가)
   const handleContainerDrop = (e: React.DragEvent) => {
     e.preventDefault();
     if (draggedIndex === null) return;
     
     console.log('컨테이너에 드롭됨 - 마지막 위치로 이동');
-    
-    // 마지막 위치로 이동 (배열 길이와 같은 인덱스 = 맨 뒤에 추가)
-    handleDrop(e, selectedWords.length);
+    moveWord(draggedIndex, selectedWords.length);
+    setDraggedIndex(null);
   };
 
   const handleDragEnd = () => {
@@ -583,6 +626,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
                   {/* 넓은 드롭 영역 */}
                   <div
                     className="w-8 h-10 flex items-center justify-center opacity-0 hover:opacity-30 transition-opacity"
+                    data-drop-index={index}
                     onDragOver={handleDragOver}
                     onDrop={(e) => { e.stopPropagation(); handleDrop(e, index); }}
                     style={{ 
@@ -594,11 +638,14 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
                   </div>
                   
                   <span 
-                    className="text-lg font-medium text-gray-800 px-2 py-1 cursor-move hover:bg-gray-100 rounded border border-gray-200 bg-blue-50"
+                    className="text-lg font-medium text-gray-800 px-2 py-1 cursor-move hover:bg-gray-100 rounded border border-gray-200 bg-blue-50 select-none"
                     onClick={() => handleSelectedWordClick(index)}
                     draggable
                     onDragStart={() => handleDragStart(index)}
                     onDragEnd={handleDragEnd}
+                    onTouchStart={(e) => handleTouchStart(e, index)}
+                    onTouchMove={handleTouchMove}
+                    onTouchEnd={handleTouchEnd}
                     style={{
                       opacity: draggedIndex === index ? 0.5 : 1
                     }}
@@ -610,6 +657,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
                   {index === selectedWords.length - 1 && (
                     <div
                       className="w-8 h-10 flex items-center justify-center opacity-0 hover:opacity-30 transition-opacity"
+                      data-drop-index={index + 1}
                       onDragOver={handleDragOver}
                       onDrop={(e) => { e.stopPropagation(); handleDrop(e, index + 1); }}
                       style={{ 
@@ -659,22 +707,37 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
           })}
         </div>
 
-        {/* Result Display - 간단하게 */}
-        {showResult && !isCorrect && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-center">
-            <div className="flex items-center justify-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => speakText(currentSentence.englishSentence)}
-                className="h-8 w-8"
-              >
-                <Volume2 className="w-4 h-4" />
-              </Button>
-              <p className="text-sm font-medium text-gray-800">{currentSentence.englishSentence}</p>
+        {/* Result Display - 슬라이드 애니메이션 */}
+        <div className={`transition-all duration-500 ease-in-out overflow-hidden ${
+          showResult ? 'max-h-32 opacity-100 mb-4' : 'max-h-0 opacity-0'
+        }`}>
+          {showResult && (
+            <div className={`p-3 rounded-lg text-center transform transition-transform duration-300 ${
+              isCorrect 
+                ? 'bg-green-50 border border-green-200 translate-y-0' 
+                : 'bg-red-50 border border-red-200 translate-y-0'
+            }`}>
+              <div className="flex items-center justify-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => speakText(currentSentence.englishSentence)}
+                  className="h-8 w-8"
+                >
+                  <Volume2 className="w-4 h-4" />
+                </Button>
+                <div>
+                  {!isCorrect && (
+                    <p className="text-sm font-medium text-gray-800 mb-1">{currentSentence.englishSentence}</p>
+                  )}
+                  {isCorrect && (
+                    <p className="text-sm font-medium text-green-700">정답입니다!</p>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
         
         {/* 남은 공간 채우기 */}
         <div className="flex-1"></div>

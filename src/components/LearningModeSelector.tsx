@@ -14,7 +14,7 @@ export function LearningModeSelector({ onSelectMode }: LearningModeSelectorProps
         {/* 앱 제목 */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-foreground mb-2">
-            Blabla EN
+            술술영어
           </h1>
         </div>
 
