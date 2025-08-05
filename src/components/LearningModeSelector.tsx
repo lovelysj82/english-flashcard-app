@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { MessageCircle, Mic, BookOpen, Volume2 } from "lucide-react";
+import { MessageCircle, Mic, BookOpen } from "lucide-react";
 
 export type LearningMode = 'sentence-completion' | 'speaking';
 
@@ -37,19 +37,7 @@ export function LearningModeSelector({ onSelectMode }: LearningModeSelectorProps
                 단어 버튼을 클릭하여 올바른 순서로 영어 문장을 완성하세요
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <div className="w-2 h-2 bg-learning-secondary rounded-full"></div>
-                <span>한국어 문장을 보고 영어로 조합</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <div className="w-2 h-2 bg-learning-secondary rounded-full"></div>
-                <span>단어 버튼 클릭으로 직관적 학습</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <Volume2 className="w-4 h-4" />
-                <span>TTS 발음 기능 제공</span>
-              </div>
+            <CardContent>
               <Button 
                 variant="default" 
                 size="lg" 
@@ -74,19 +62,7 @@ export function LearningModeSelector({ onSelectMode }: LearningModeSelectorProps
                 마이크를 사용하여 영어 문장을 직접 말해보고 연습하세요
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <div className="w-2 h-2 bg-learning-secondary rounded-full"></div>
-                <span>실제 발음 연습으로 스피킹 향상</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <div className="w-2 h-2 bg-learning-secondary rounded-full"></div>
-                <span>STT 음성 인식 기술 활용</span>
-              </div>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <Volume2 className="w-4 h-4" />
-                <span>원어민 발음 피드백</span>
-              </div>
+            <CardContent>
               <Button 
                 variant="default" 
                 size="lg" 
@@ -100,12 +76,6 @@ export function LearningModeSelector({ onSelectMode }: LearningModeSelectorProps
               </Button>
             </CardContent>
           </Card>
-        </div>
-
-        <div className="text-center mt-12">
-          <p className="text-sm text-muted-foreground">
-            💡 각 레벨의 모든 문장을 정답으로 맞춰야 다음 레벨로 진행됩니다
-          </p>
         </div>
       </div>
     </div>
