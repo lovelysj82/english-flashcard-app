@@ -23,7 +23,16 @@ const Index = () => {
         setDataError(null);
         console.log('📊 데이터 로딩 시작...');
         
-        const data = await dataService.getSentences();
+        // 최대 8초 타임아웃
+        const timeoutPromise = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('로딩 타임아웃: 8초 초과')), 8000)
+        );
+        
+        const data = await Promise.race([
+          dataService.getSentences(),
+          timeoutPromise
+        ]);
+        
         setSentences(data);
         
         const status = dataService.getDataStatus();
@@ -36,6 +45,15 @@ const Index = () => {
       } catch (error) {
         console.error('❌ 데이터 로딩 실패:', error);
         setDataError('데이터를 불러올 수 없습니다');
+        
+        // 타임아웃이나 오류 시 폴백 데이터라도 로드
+        try {
+          const fallbackData = await import('../data/sampleSentences');
+          setSentences(fallbackData.sampleSentences);
+          setDataError('네트워크 오류, 기본 데이터 사용 중');
+        } catch (fallbackError) {
+          console.error('폴백 데이터 로딩도 실패:', fallbackError);
+        }
       } finally {
         setIsLoading(false);
       }

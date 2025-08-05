@@ -17,10 +17,21 @@ export async function fetchGoogleSheetsData(spreadsheetId: string): Promise<Goog
     
     console.log('구글 스프레드시트에서 데이터 가져오는 중...', csvUrl);
     
-    const response = await fetch(csvUrl);
+    // 타임아웃 설정 (10초)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    const response = await fetch(csvUrl, {
+      signal: controller.signal,
+      headers: {
+        'Accept': 'text/csv',
+      }
+    });
+    
+    clearTimeout(timeoutId);
     
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      throw new Error(`HTTP error! status: ${response.status} - ${response.statusText}`);
     }
     
     const csvText = await response.text();
@@ -126,7 +137,34 @@ export function setCachedData(data: GoogleSheetsData[]): void {
 
 // 폴백 데이터 (네트워크 오류 시 사용)
 export function getFallbackData(): GoogleSheetsData[] {
-  // 기존 sampleSentences.ts의 데이터를 반환하거나
-  // 하드코딩된 기본 데이터를 반환
-  return [];
+  // sampleSentences 형식으로 변환하여 반환
+  const fallbackData: GoogleSheetsData[] = [
+    {
+      id: "1-1",
+      level: 1,
+      category: "기본 인사",
+      koreanSentence: "안녕하세요.",
+      englishSentence: "Hello.",
+      notes: "기본 인사 표현"
+    },
+    {
+      id: "1-2", 
+      level: 1,
+      category: "기본 인사",
+      koreanSentence: "반갑습니다.",
+      englishSentence: "Nice to meet you.",
+      notes: "처음 만났을 때 인사"
+    },
+    {
+      id: "1-3",
+      level: 1, 
+      category: "일상 표현",
+      koreanSentence: "오늘은 좋은 날이에요.",
+      englishSentence: "It's a good day.",
+      notes: "긍정적인 하루 표현"
+    }
+  ];
+  
+  console.log('폴백 데이터 사용:', fallbackData.length, '개');
+  return fallbackData;
 }

@@ -46,9 +46,18 @@ export class DataService {
         return this.data;
       }
 
-      // 2단계: 구글 시트에서 데이터 가져오기
+      // 2단계: 구글 시트에서 데이터 가져오기 (타임아웃 5초)
       console.log('🌐 구글 시트에서 데이터 가져오는 중...');
-      const googleSheetsData = await fetchGoogleSheetsData(config.googleSheets.spreadsheetId);
+      
+      // 빠른 폴백을 위한 타임아웃 설정
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Timeout: 5초 내에 응답 없음')), 5000)
+      );
+      
+      const googleSheetsData = await Promise.race([
+        fetchGoogleSheetsData(config.googleSheets.spreadsheetId),
+        timeoutPromise
+      ]);
       
       if (googleSheetsData && googleSheetsData.length > 0) {
         console.log('✅ 구글 시트 데이터 로드 성공');
