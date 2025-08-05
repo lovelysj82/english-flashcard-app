@@ -538,66 +538,63 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
 
   const currentSentenceList = isReviewMode ? reviewSentences : levelSentences;
   const progress = currentSentenceList.length > 0 
-    ? ((currentSentenceIndex + 1) / currentSentenceList.length) * 100 
+    ? (currentSentenceIndex / currentSentenceList.length) * 100 
     : 0;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="h-screen bg-background flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center justify-between p-3 border-b flex-shrink-0">
         <Button variant="ghost" size="icon" onClick={onBack}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <div className="flex-1 mx-4">
-          <div className="h-3 bg-gray-200 rounded-full overflow-hidden">
+        <div className="flex-1 mx-3">
+          <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
             <div 
               className="h-full bg-green-500 transition-all duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
         </div>
-        <span className="text-sm font-medium text-gray-600">
+        <span className="text-xs font-medium text-gray-600">
           {currentSentenceIndex + 1}/{currentSentenceList.length}
         </span>
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col p-4 max-w-md mx-auto w-full overflow-hidden">
+      <div className="flex-1 flex flex-col p-3 max-w-sm mx-auto w-full min-h-0">
         {/* Korean Sentence */}
         <div className="text-center mb-6">
-          <p className="text-base font-medium text-gray-800 mb-3">
-            다음 문장을 영어로 번역하세요
-          </p>
-          <p className="text-lg font-semibold">
+          <p className="text-xl font-semibold text-gray-800">
             {currentSentence.koreanSentence}
           </p>
         </div>
 
         {/* English Answer Area with Underlines */}
-        <div className="mb-6">
+        <div className="mb-5">
           <div 
-            className="flex flex-wrap gap-2 justify-center min-h-[2.5rem] items-end p-2 rounded-lg border-2 border-dashed border-gray-300"
+            className="flex flex-wrap justify-center min-h-[2.5rem] items-center p-2 rounded-lg border-2 border-dashed border-gray-300"
             onDragOver={handleDragOver}
             onDrop={handleContainerDrop}
           >
             {selectedWords.length > 0 ? (
               selectedWords.map((word, index) => (
                 <div key={index} className="flex items-center">
-                  {/* 앞쪽 드롭 영역 */}
+                  {/* 넓은 드롭 영역 */}
                   <div
-                    className="w-4 h-full min-h-[2rem] flex items-center justify-center opacity-0 hover:opacity-50 transition-opacity"
+                    className="w-8 h-10 flex items-center justify-center opacity-0 hover:opacity-30 transition-opacity"
                     onDragOver={handleDragOver}
-                    onDrop={(e) => handleDrop(e, index)}
+                    onDrop={(e) => { e.stopPropagation(); handleDrop(e, index); }}
                     style={{ 
-                      backgroundColor: draggedIndex !== null ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                      borderRadius: '4px'
+                      backgroundColor: draggedIndex !== null ? 'rgba(59, 130, 246, 0.3)' : 'transparent',
+                      borderRadius: '6px'
                     }}
                   >
-                    <div className="w-0.5 h-6 bg-blue-400 rounded-full"></div>
+                    <div className="w-1 h-8 bg-blue-400 rounded-full opacity-60"></div>
                   </div>
                   
                   <span 
-                    className="text-lg font-medium text-gray-800 px-2 py-1 cursor-move hover:bg-gray-100 rounded border border-gray-200 bg-blue-50 mx-1"
+                    className="text-lg font-medium text-gray-800 px-2 py-1 cursor-move hover:bg-gray-100 rounded border border-gray-200 bg-blue-50"
                     onClick={() => handleSelectedWordClick(index)}
                     draggable
                     onDragStart={() => handleDragStart(index)}
@@ -612,15 +609,15 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
                   {/* 뒤쪽 드롭 영역 (마지막 단어인 경우) */}
                   {index === selectedWords.length - 1 && (
                     <div
-                      className="w-4 h-full min-h-[2rem] flex items-center justify-center opacity-0 hover:opacity-50 transition-opacity"
+                      className="w-8 h-10 flex items-center justify-center opacity-0 hover:opacity-30 transition-opacity"
                       onDragOver={handleDragOver}
-                      onDrop={(e) => handleDrop(e, index + 1)}
+                      onDrop={(e) => { e.stopPropagation(); handleDrop(e, index + 1); }}
                       style={{ 
-                        backgroundColor: draggedIndex !== null ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-                        borderRadius: '4px'
+                        backgroundColor: draggedIndex !== null ? 'rgba(59, 130, 246, 0.3)' : 'transparent',
+                        borderRadius: '6px'
                       }}
                     >
-                      <div className="w-0.5 h-6 bg-blue-400 rounded-full"></div>
+                      <div className="w-1 h-8 bg-blue-400 rounded-full opacity-60"></div>
                     </div>
                   )}
                 </div>
@@ -628,8 +625,13 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
             ) : (
               // Duolingo 스타일 밑줄 표시
               <div className="flex flex-wrap gap-2 justify-center w-full">
-                {Array.from({ length: parseEnglishSentence(currentSentence.englishSentence).length }).map((_, index) => (
-                  <div key={index} className="border-b-2 border-gray-400 min-w-[50px] h-6"></div>
+                {parseEnglishSentence(currentSentence.englishSentence).map((word, index) => (
+                  <div 
+                    key={index} 
+                    className="border-b-2 border-gray-400 h-6 flex items-end"
+                    style={{ width: `${Math.max(word.length * 10, 30)}px` }}
+                  >
+                  </div>
                 ))}
               </div>
             )}
@@ -637,7 +639,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         </div>
 
         {/* Word Selection Buttons */}
-        <div className="flex flex-wrap gap-2 justify-center mb-4">
+        <div className="flex flex-wrap gap-2 justify-center mb-3">
           {allWords.map((word, index) => {
             const isSelected = selectedIndices.includes(index);
             return (
@@ -647,7 +649,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
                 onClick={() => isSelected ? handleSelectedWordRemove(word, index) : handleWordClick(word, index)}
                 className={`text-sm px-3 py-2 min-h-[40px] ${
                   isSelected 
-                    ? "bg-gray-100 text-gray-400 border-gray-200" 
+                    ? "bg-gray-100 text-transparent border-gray-200 cursor-pointer" 
                     : "bg-white border-gray-300 hover:bg-gray-50"
                 }`}
               >
@@ -678,13 +680,13 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         <div className="flex-1"></div>
       </div>
 
-      {/* Bottom Button */}
-      <div className="p-4">
+      {/* Bottom Button - 아이폰 호환성 개선 */}
+      <div className="p-3 pb-6 flex-shrink-0">
         {!showResult ? (
           <Button 
             onClick={handleCheck} 
             disabled={selectedWords.length === 0}
-            className={`w-full py-4 text-lg font-bold transition-all ${
+            className={`w-full py-3 text-base font-bold transition-all ${
               selectedWords.length === 0
                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 : 'bg-green-500 hover:bg-green-600 text-white'
@@ -695,7 +697,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         ) : (
           <Button 
             onClick={levelCompleted ? onBack : handleNext} 
-            className="w-full py-4 text-lg font-bold bg-green-500 hover:bg-green-600 text-white"
+            className="w-full py-3 text-base font-bold bg-green-500 hover:bg-green-600 text-white"
           >
             {levelCompleted ? '완료' : '계속'}
           </Button>
