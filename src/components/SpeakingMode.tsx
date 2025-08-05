@@ -130,9 +130,9 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
     }
   };
 
-  // 문장부호 제거 함수 (어퍼스트로피 포함)
+  // 문장부호 제거 함수 (어퍼스트로피, 하이픈 포함)
   const removePunctuation = (text: string) => {
-    return text.replace(/[.,!?;:"'()[\]{}]/g, '').trim();
+    return text.replace(/[.,!?;:"'()[\]{}\-]/g, '').trim();
   };
 
   // 첫 글자 대문자로 변환
@@ -188,7 +188,7 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
     const userAnswer = removePunctuation(processedSpokenText).toLowerCase();
     const correctAnswer = removePunctuation(currentSentence.englishSentence).toLowerCase();
     
-    console.log(`=== 정답 비교 디버깅 (어퍼스트로피 제거) ===`);
+    console.log(`=== 정답 비교 디버깅 (문장부호 및 하이픈 제거) ===`);
     console.log(`사용자 입력 (원본): "${spokenText}"`);
     console.log(`사용자 입력 (처리후): "${processedSpokenText}"`);
     console.log(`사용자 답안 (문장부호 제거): "${userAnswer}"`);
@@ -204,7 +204,7 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
       // 완전 일치하면 100% 정확도
       correct = true;
       similarity = 1.0;
-      console.log(`✅ 완전 일치 (어퍼스트로피 제거): "${userAnswer}" === "${correctAnswer}"`);
+      console.log(`✅ 완전 일치 (문장부호 및 하이픈 제거): "${userAnswer}" === "${correctAnswer}"`);
     } else {
       // 유사도 계산
       similarity = calculateSimilarity(userAnswer, correctAnswer);

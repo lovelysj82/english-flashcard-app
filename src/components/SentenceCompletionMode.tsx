@@ -57,9 +57,9 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
     ? reviewSentences[currentSentenceIndex]
     : levelSentences[currentSentenceIndex];
 
-  // 문장부호 제거 함수 (어퍼스트로피는 유지)
+  // 문장부호 제거 함수 (어퍼스트로피는 유지, 하이픈 제거)
   const removePunctuation = (word: string) => {
-    return word.replace(/[.,!?;:"()[\]{}]/g, '');
+    return word.replace(/[.,!?;:"()[\]{}\-]/g, '');
   };
 
   // 영어 문장을 단어로 분리하는 함수 (어퍼스트로피 처리 포함)
