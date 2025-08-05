@@ -137,6 +137,25 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
     setSelectedIndices(selectedIndices.filter((_, i) => i !== index));
   };
 
+  // 선택된 단어를 다시 클릭했을 때 제거하는 함수 (단어 버튼에서)
+  const handleSelectedWordRemove = (word: string, originalIndex: number) => {
+    console.log(`선택된 단어 제거: ${word}, 원본 인덱스: ${originalIndex}`);
+    
+    // selectedIndices에서 해당 인덱스를 찾아서 제거
+    const indexToRemove = selectedIndices.indexOf(originalIndex);
+    if (indexToRemove !== -1) {
+      const newSelectedWords = [...selectedWords];
+      const newSelectedIndices = [...selectedIndices];
+      
+      newSelectedWords.splice(indexToRemove, 1);
+      newSelectedIndices.splice(indexToRemove, 1);
+      
+      setSelectedWords(newSelectedWords);
+      setSelectedIndices(newSelectedIndices);
+      setShowResult(false);
+    }
+  };
+
   // 드래그 앤 드롭 함수들
   const handleDragStart = (index: number) => {
     setDraggedIndex(index);
@@ -543,36 +562,74 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col justify-center p-4 max-w-md mx-auto w-full">
+      <div className="flex-1 flex flex-col p-4 max-w-md mx-auto w-full overflow-hidden">
         {/* Korean Sentence */}
-        <div className="text-center mb-8">
-          <p className="text-lg font-medium text-gray-800 mb-4">
+        <div className="text-center mb-6">
+          <p className="text-base font-medium text-gray-800 mb-3">
             다음 문장을 영어로 번역하세요
           </p>
-          <p className="text-xl font-semibold">
+          <p className="text-lg font-semibold">
             {currentSentence.koreanSentence}
           </p>
         </div>
 
         {/* English Answer Area with Underlines */}
-        <div className="mb-8">
-          <div className="flex flex-wrap gap-2 justify-center min-h-[3rem] items-end">
+        <div className="mb-6">
+          <div 
+            className="flex flex-wrap gap-2 justify-center min-h-[2.5rem] items-end p-2 rounded-lg border-2 border-dashed border-gray-300"
+            onDragOver={handleDragOver}
+            onDrop={handleContainerDrop}
+          >
             {selectedWords.length > 0 ? (
               selectedWords.map((word, index) => (
                 <div key={index} className="flex items-center">
-                  <span className="text-xl font-medium text-gray-800 px-1">
+                  {/* 앞쪽 드롭 영역 */}
+                  <div
+                    className="w-4 h-full min-h-[2rem] flex items-center justify-center opacity-0 hover:opacity-50 transition-opacity"
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, index)}
+                    style={{ 
+                      backgroundColor: draggedIndex !== null ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+                      borderRadius: '4px'
+                    }}
+                  >
+                    <div className="w-0.5 h-6 bg-blue-400 rounded-full"></div>
+                  </div>
+                  
+                  <span 
+                    className="text-lg font-medium text-gray-800 px-2 py-1 cursor-move hover:bg-gray-100 rounded border border-gray-200 bg-blue-50 mx-1"
+                    onClick={() => handleSelectedWordClick(index)}
+                    draggable
+                    onDragStart={() => handleDragStart(index)}
+                    onDragEnd={handleDragEnd}
+                    style={{
+                      opacity: draggedIndex === index ? 0.5 : 1
+                    }}
+                  >
                     {word}
                   </span>
-                  {index < selectedWords.length - 1 && (
-                    <span className="text-xl text-gray-800 mx-1"> </span>
+                  
+                  {/* 뒤쪽 드롭 영역 (마지막 단어인 경우) */}
+                  {index === selectedWords.length - 1 && (
+                    <div
+                      className="w-4 h-full min-h-[2rem] flex items-center justify-center opacity-0 hover:opacity-50 transition-opacity"
+                      onDragOver={handleDragOver}
+                      onDrop={(e) => handleDrop(e, index + 1)}
+                      style={{ 
+                        backgroundColor: draggedIndex !== null ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+                        borderRadius: '4px'
+                      }}
+                    >
+                      <div className="w-0.5 h-6 bg-blue-400 rounded-full"></div>
+                    </div>
                   )}
                 </div>
               ))
             ) : (
               // Duolingo 스타일 밑줄 표시
-              <div className="flex flex-wrap gap-3 justify-center">
+              <div className="flex flex-wrap gap-2 justify-center w-full">
                 {Array.from({ length: parseEnglishSentence(currentSentence.englishSentence).length }).map((_, index) => (
-                  <div key={index} className="border-b-2 border-gray-400 min-w-[60px] h-8"></div>
+                  <div key={index} className="border-b-2 border-gray-400 min-w-[50px] h-6"></div>
                 ))}
               </div>
             )}
@@ -580,20 +637,19 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         </div>
 
         {/* Word Selection Buttons */}
-        <div className="flex flex-wrap gap-3 justify-center mb-8">
+        <div className="flex flex-wrap gap-2 justify-center mb-4">
           {allWords.map((word, index) => {
             const isSelected = selectedIndices.includes(index);
             return (
               <Button
                 key={index}
                 variant={isSelected ? "ghost" : "outline"}
-                onClick={() => !isSelected && handleWordClick(word, index)}
-                className={`text-base px-4 py-2 min-h-[44px] ${
+                onClick={() => isSelected ? handleSelectedWordRemove(word, index) : handleWordClick(word, index)}
+                className={`text-sm px-3 py-2 min-h-[40px] ${
                   isSelected 
-                    ? "bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed" 
+                    ? "bg-gray-100 text-gray-400 border-gray-200" 
                     : "bg-white border-gray-300 hover:bg-gray-50"
                 }`}
-                disabled={isSelected}
               >
                 {word}
               </Button>
@@ -601,39 +657,25 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
           })}
         </div>
 
-        {/* Result Display */}
-        {showResult && (
-          <div className={`mb-6 p-4 rounded-xl text-center ${
-            isCorrect 
-              ? 'bg-green-100 border-2 border-green-300' 
-              : 'bg-red-100 border-2 border-red-300'
-          }`}>
-            <div className="flex items-center justify-center gap-2 mb-2">
-              {isCorrect ? (
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              ) : (
-                <XCircle className="w-6 h-6 text-red-600" />
-              )}
-              <span className={`font-bold text-lg ${isCorrect ? 'text-green-700' : 'text-red-700'}`}>
-                {isCorrect ? '잘했어요!' : '정답이 아니에요'}
-              </span>
+        {/* Result Display - 간단하게 */}
+        {showResult && !isCorrect && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-center">
+            <div className="flex items-center justify-center gap-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => speakText(currentSentence.englishSentence)}
+                className="h-8 w-8"
+              >
+                <Volume2 className="w-4 h-4" />
+              </Button>
+              <p className="text-sm font-medium text-gray-800">{currentSentence.englishSentence}</p>
             </div>
-            
-            {!isCorrect && (
-              <div className="flex items-center justify-center gap-3 mt-3">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => speakText(currentSentence.englishSentence)}
-                  className="h-10 w-10"
-                >
-                  <Volume2 className="w-5 h-5" />
-                </Button>
-                <p className="text-lg font-medium text-gray-800">{currentSentence.englishSentence}</p>
-              </div>
-            )}
           </div>
         )}
+        
+        {/* 남은 공간 채우기 */}
+        <div className="flex-1"></div>
       </div>
 
       {/* Bottom Button */}
