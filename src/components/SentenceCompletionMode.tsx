@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Volume2, RotateCcw, CheckCircle, XCircle, ArrowLeft } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+
 
 interface Sentence {
   id: string;
@@ -40,7 +40,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
   const [wrongAnswers, setWrongAnswers] = useState<Set<string>>(new Set());
   const [levelCompleted, setLevelCompleted] = useState(false);
   const [isReviewMode, setIsReviewMode] = useState(false);
-  const { toast } = useToast();
+
 
   // Get sentences for current level
   const levelSentences = sentences.filter(s => s.level === currentLevel);
@@ -158,25 +158,50 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
 
   // 드래그 앤 드롭 및 터치 이벤트 처리
   const [touchStartPos, setTouchStartPos] = useState<{x: number, y: number} | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleDragStart = (index: number) => {
     console.log(`드래그 시작: index=${index}`);
     setDraggedIndex(index);
+    setIsDragging(true);
   };
 
   const handleTouchStart = (e: React.TouchEvent, index: number) => {
     const touch = e.touches[0];
     setTouchStartPos({ x: touch.clientX, y: touch.clientY });
-    setDraggedIndex(index);
-    console.log(`터치 시작: index=${index}`);
+    
+    // 짧은 지연 후 드래그 시작 (더 부드러운 감지)
+    setTimeout(() => {
+      if (touchStartPos) {
+        setDraggedIndex(index);
+        setIsDragging(true);
+        console.log(`터치 드래그 시작: index=${index}`);
+      }
+    }, 100);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    e.preventDefault(); // 스크롤 방지
+    if (!touchStartPos) return;
+    
+    const touch = e.touches[0];
+    const deltaX = Math.abs(touch.clientX - touchStartPos.x);
+    const deltaY = Math.abs(touch.clientY - touchStartPos.y);
+    
+    // 10px 이상 움직이면 드래그로 판단
+    if (deltaX > 10 || deltaY > 10) {
+      e.preventDefault(); // 스크롤 방지
+      setIsDragging(true);
+    }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (draggedIndex === null || !touchStartPos) return;
+    if (draggedIndex === null || !touchStartPos || !isDragging) {
+      // 드래그가 아닌 경우 클릭으로 처리
+      setTouchStartPos(null);
+      setDraggedIndex(null);
+      setIsDragging(false);
+      return;
+    }
 
     const touch = e.changedTouches[0];
     const element = document.elementFromPoint(touch.clientX, touch.clientY);
@@ -201,6 +226,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
     
     setDraggedIndex(null);
     setTouchStartPos(null);
+    setIsDragging(false);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -277,11 +303,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         console.log(`틀린 문제 추가 후 wrongAnswers:`, Array.from(newSet));
         return newSet;
       });
-      toast({
-        title: "틀렸습니다",
-        description: "정답을 확인하고 다시 시도해보세요.",
-        variant: "destructive",
-      });
+
     } else {
       // 정답일 때 wrongAnswers에서 제거
       setWrongAnswers(prev => {
@@ -303,10 +325,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         
         return newSet;
       });
-      toast({
-        title: "정답입니다!",
-        description: "잘하셨습니다!",
-      });
+
     }
   };
 
@@ -375,18 +394,12 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
       console.log(`=== 자동 디버깅 끝 ===`);
       
       if (hasNextLevel) {
-        toast({
-          title: "레벨 완료!",
-          description: `레벨 ${currentLevel}을 완료했습니다!`,
-        });
+
       } else {
-        toast({
-          title: "모든 레벨 완료!",
-          description: `축하합니다! 모든 학습을 완료했습니다.`,
-        });
+
       }
     }
-  }, [isReviewMode, wrongAnswers.size, reviewSentences.length, currentLevel, sentences, toast, saveProgress]);
+  }, [isReviewMode, wrongAnswers.size, reviewSentences.length, currentLevel, sentences, saveProgress]);
 
   const handleNext = () => {
     const currentSentenceList = isReviewMode ? reviewSentences : levelSentences;
@@ -410,10 +423,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         console.log(`>>> 조건 1 실행: 복습 모드 시작`);
         setIsReviewMode(true);
         setCurrentSentenceIndex(0); // 복습 시 첫 번째 틀린 문제부터 시작
-        toast({
-          title: "복습 모드",
-          description: `틀린 문제 ${wrongAnswers.size}개를 다시 풀어보세요.`,
-        });
+
       } else if (isReviewMode && wrongAnswers.size === 0) {
         // 복습 모드에서 모든 문제 완료
         console.log(`>>> 조건 2 실행: 복습 모드에서 모든 문제 완료`);
@@ -438,12 +448,12 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         console.log(`=== 디버깅 끝 ===`);
         
         if (hasNextLevel) {
-          toast({
+          // toast({
             title: "레벨 완료!",
             description: `레벨 ${currentLevel}을 완료했습니다!`,
           });
         } else {
-          toast({
+          // toast({
             title: "모든 레벨 완료!",
             description: `축하합니다! 모든 학습을 완료했습니다.`,
           });
@@ -467,12 +477,12 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         console.log(`=== 복습 디버깅 끝 ===`);
         
         if (hasNextLevel) {
-          toast({
+          // toast({
             title: "레벨 완료!",
             description: `레벨 ${currentLevel}을 완료했습니다!`,
           });
         } else {
-          toast({
+          // toast({
             title: "모든 레벨 완료!",
             description: `축하합니다! 모든 학습을 완료했습니다.`,
           });
@@ -489,7 +499,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
           // 아직 틀린 문제가 있음 - 복습 모드를 처음부터 다시 시작
           console.log(`복습 모드 재시작 - 틀린 문제 ${wrongAnswers.size}개`);
           setCurrentSentenceIndex(0);
-          toast({
+          // toast({
             title: "복습 계속",
             description: `아직 틀린 문제 ${wrongAnswers.size}개가 있습니다. 다시 풀어보세요.`,
           });
@@ -585,7 +595,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
     : 0;
 
   return (
-    <div className="h-screen bg-background flex flex-col">
+    <div className="h-screen bg-background flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b flex-shrink-0">
         <Button variant="ghost" size="icon" onClick={onBack}>
@@ -605,7 +615,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col p-3 max-w-sm mx-auto w-full min-h-0">
+      <div className="flex-1 flex flex-col p-3 max-w-sm mx-auto w-full" style={{ minHeight: '0' }}>
         {/* Korean Sentence */}
         <div className="text-center mb-6">
           <p className="text-xl font-semibold text-gray-800">
@@ -687,7 +697,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         </div>
 
         {/* Word Selection Buttons */}
-        <div className="flex flex-wrap gap-2 justify-center mb-3">
+        <div className="flex flex-wrap gap-1 justify-center mb-3">
           {allWords.map((word, index) => {
             const isSelected = selectedIndices.includes(index);
             return (
@@ -743,8 +753,16 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         <div className="flex-1"></div>
       </div>
 
-      {/* Bottom Button - 아이폰 호환성 개선 */}
-      <div className="p-3 pb-6 flex-shrink-0">
+      {/* Bottom Button - 아이폰 Safe Area 고려 */}
+      <div 
+        className="flex-shrink-0 bg-background border-t border-gray-200"
+        style={{ 
+          paddingLeft: '12px', 
+          paddingRight: '12px', 
+          paddingTop: '12px',
+          paddingBottom: 'max(12px, env(safe-area-inset-bottom))'
+        }}
+      >
         {!showResult ? (
           <Button 
             onClick={handleCheck} 
