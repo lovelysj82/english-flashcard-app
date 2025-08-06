@@ -55,63 +55,127 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
 
   // Speech Recognition setup
   const [recognition, setRecognition] = useState<any>(null);
+  const [micPermissionGranted, setMicPermissionGranted] = useState<boolean | null>(null);
 
   useEffect(() => {
-    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognitionInstance = new SpeechRecognition();
-      
-      // 수동 종료를 위한 설정 변경
-      recognitionInstance.continuous = true; // 연속 음성인식 활성화
-      recognitionInstance.interimResults = true; // 중간 결과도 받기
-      recognitionInstance.lang = 'en-US';
-
-      recognitionInstance.onresult = (event) => {
-        // 가장 최신의 최종 결과만 사용
-        let finalTranscript = '';
-        let interimTranscript = '';
+    const initializeSpeechRecognition = async () => {
+      // 갤럭시 마이크 권한 미리 확인
+      try {
+        console.log('🎤 [갤럭시] 마이크 권한 확인 중...');
         
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            finalTranscript += transcript;
-          } else {
-            interimTranscript += transcript;
+        if (navigator.permissions) {
+          const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+          console.log(`🎤 [갤럭시] 마이크 권한 상태: ${permission.state}`);
+          
+          if (permission.state === 'granted') {
+            setMicPermissionGranted(true);
+          } else if (permission.state === 'denied') {
+            setMicPermissionGranted(false);
+            console.error('🚫 [갤럭시] 마이크 권한이 거부되었습니다.');
+            return;
+          }
+          
+          // 권한 상태 변경 감지
+          permission.onchange = () => {
+            console.log(`🎤 [갤럭시] 마이크 권한 변경: ${permission.state}`);
+            setMicPermissionGranted(permission.state === 'granted');
+          };
+        } else {
+          // 권한 API가 없는 경우 직접 테스트
+          console.log('🎤 [갤럭시] 권한 API 없음 - 직접 테스트');
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            stream.getTracks().forEach(track => track.stop());
+            setMicPermissionGranted(true);
+            console.log('✅ [갤럭시] 마이크 권한 테스트 성공');
+          } catch (error) {
+            setMicPermissionGranted(false);
+            console.error('🚫 [갤럭시] 마이크 권한 테스트 실패:', error);
           }
         }
+      } catch (error) {
+        console.error('❌ [갤럭시] 권한 확인 오류:', error);
+        setMicPermissionGranted(null); // 권한 상태를 알 수 없음
+      }
+
+      // Speech Recognition 초기화
+      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognitionInstance = new SpeechRecognition();
         
-        // 최종 결과가 있으면 그것을 사용, 없으면 중간 결과 사용
-        const resultText = finalTranscript || interimTranscript;
-        
-        if (resultText.trim()) {
-          setSpokenText(resultText.trim());
-          console.log(`🎤 음성 인식 결과: "${resultText.trim()}" (최종: ${!!finalTranscript})`);
-        }
-      };
+        // 갤럭시 최적화 설정
+        recognitionInstance.continuous = true;
+        recognitionInstance.interimResults = true;
+        recognitionInstance.lang = 'en-US';
 
-      recognitionInstance.onerror = (event) => {
-        console.error('🚫 Speech recognition error:', event.error);
-        setIsListening(false);
-      };
+        recognitionInstance.onresult = (event) => {
+          let finalTranscript = '';
+          let interimTranscript = '';
+          
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+              finalTranscript += transcript;
+            } else {
+              interimTranscript += transcript;
+            }
+          }
+          
+          const resultText = finalTranscript || interimTranscript;
+          
+          if (resultText.trim()) {
+            setSpokenText(resultText.trim());
+            console.log(`🎤 [갤럭시] 음성 인식: "${resultText.trim()}" (최종: ${!!finalTranscript})`);
+          }
+        };
 
-      recognitionInstance.onend = () => {
-        console.log('🔚 음성 인식 종료됨');
-        setIsListening(false);
-      };
+        recognitionInstance.onerror = (event) => {
+          console.error(`🚫 [갤럭시] 음성 인식 오류: ${event.error}`);
+          
+          if (event.error === 'not-allowed') {
+            setMicPermissionGranted(false);
+            console.error('🚫 [갤럭시] 마이크 권한이 거부되었습니다.');
+            console.error('📱 [갤럭시] 해결: 브라우저 설정 → 사이트 권한 → 마이크 허용');
+          }
+          
+          setIsListening(false);
+        };
 
-      setRecognition(recognitionInstance);
-    } else {
-      console.error('❌ 음성 인식 지원되지 않음');
-    }
+        recognitionInstance.onend = () => {
+          console.log('🔚 [갤럭시] 음성 인식 종료');
+          setIsListening(false);
+        };
+
+        setRecognition(recognitionInstance);
+      } else {
+        console.error('❌ [갤럭시] Speech Recognition API 지원되지 않음');
+      }
+    };
+
+    initializeSpeechRecognition();
   }, []);
 
   const startListening = () => {
-    if (recognition) {
+    // 갤럭시 권한 확인
+    if (micPermissionGranted === false) {
+      console.error('🚫 [갤럭시] 마이크 권한이 거부됨 - 음성 인식 불가');
+      alert('마이크 권한이 필요합니다.\n브라우저 설정 → 사이트 권한 → 마이크 허용으로 설정해주세요.');
+      return;
+    }
+
+    if (recognition && micPermissionGranted !== false) {
       setSpokenText("");
       setShowResult(false);
       setIsEditing(false);
       setIsListening(true);
-      recognition.start();
+      
+      try {
+        console.log('🎤 [갤럭시] 음성 인식 시작');
+        recognition.start();
+      } catch (error) {
+        console.error('❌ [갤럭시] 음성 인식 시작 오류:', error);
+        setIsListening(false);
+      }
     }
   };
 
@@ -407,88 +471,131 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
     return processedText;
   };
 
-  const speakText = (text: string) => {
+  const speakText = async (text: string) => {
+    console.log(`🎵 [갤럭시 TTS] 음성 재생 요청: "${text}"`);
+    
+    // 갤럭시 오디오 권한 및 컨텍스트 확인
+    try {
+      // Web Audio API를 사용한 오디오 컨텍스트 활성화 (갤럭시 필수)
+      if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+        const AudioContextClass = AudioContext || webkitAudioContext;
+        const audioContext = new AudioContextClass();
+        
+        if (audioContext.state === 'suspended') {
+          console.log('🔧 [갤럭시] 오디오 컨텍스트 활성화 중...');
+          await audioContext.resume();
+          console.log(`✅ [갤럭시] 오디오 컨텍스트 활성화 완료: ${audioContext.state}`);
+        }
+        
+        audioContext.close(); // 리소스 정리
+      }
+    } catch (audioError) {
+      console.warn('⚠️ [갤럭시] 오디오 컨텍스트 활성화 실패:', audioError);
+    }
+
     if ('speechSynthesis' in window) {
-      console.log(`🎵 [갤럭시 TTS] 음성 재생 시작: "${text}"`);
-      
       // 갤럭시 Chrome/Samsung Internet 호환성 강화
       speechSynthesis.cancel();
       
-      // 사용자 제스처 보장을 위한 즉시 실행
-      const processedText = preprocessForTTS(text);
-      console.log(`🔄 TTS 전처리: "${text}" → "${processedText}"`);
-      
-      const utterance = new SpeechSynthesisUtterance(processedText);
-      
-      // 갤럭시 최적화 설정
-      const voices = speechSynthesis.getVoices();
-      console.log(`🎤 사용 가능한 음성 개수: ${voices.length}`);
-      
-      // 영어 음성 우선 선택
-      const englishVoice = voices.find(voice => 
-        voice.lang.includes('en-US')
-      ) || voices.find(voice => 
-        voice.lang.includes('en')
-      ) || voices[0];
-      
-      if (englishVoice) {
-        utterance.voice = englishVoice;
-        console.log(`✅ 선택된 음성: ${englishVoice.name} (${englishVoice.lang})`);
-      } else {
-        console.warn('⚠️ 영어 음성을 찾을 수 없음');
-      }
-      
-      utterance.lang = 'en-US';
-      utterance.rate = 0.8;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-      
-      // 갤럭시 전용 이벤트 핸들러
-      utterance.onstart = () => {
-        console.log(`🎯 [갤럭시] TTS 재생 시작 성공!`);
+      // 음성 엔진 준비 대기 (갤럭시 중요)
+      const waitForVoices = () => {
+        return new Promise<SpeechSynthesisVoice[]>((resolve) => {
+          const voices = speechSynthesis.getVoices();
+          if (voices.length > 0) {
+            resolve(voices);
+          } else {
+            speechSynthesis.onvoiceschanged = () => {
+              const newVoices = speechSynthesis.getVoices();
+              resolve(newVoices);
+            };
+            // 최대 3초 대기
+            setTimeout(() => resolve(speechSynthesis.getVoices()), 3000);
+          }
+        });
       };
-      
-      utterance.onend = () => {
-        console.log(`✅ [갤럭시] TTS 재생 완료!`);
-      };
-      
-      utterance.onerror = (event) => {
-        console.error(`❌ [갤럭시] TTS 오류:`, event.error);
-        console.error(`오류 상세:`, event);
-        
-        // 갤럭시 권한 문제 진단
-        if (event.error === 'not-allowed') {
-          console.error('🚫 [갤럭시] 오디오 권한이 거부되었습니다.');
-          console.error('📱 해결방법: 브라우저 설정 → 사이트 권한 → 오디오 허용');
-        } else if (event.error === 'network') {
-          console.error('🌐 [갤럭시] 네트워크 오류 - 온라인 TTS 서비스 문제');
-        }
-      };
-      
-      // 갤럭시에서 즉시 실행 (사용자 제스처 보장)
+
       try {
+        const voices = await waitForVoices();
+        console.log(`🎤 [갤럭시] 사용 가능한 음성: ${voices.length}개`);
+
+        const processedText = preprocessForTTS(text);
+        console.log(`🔄 [갤럭시] TTS 전처리: "${text}" → "${processedText}"`);
+        
+        const utterance = new SpeechSynthesisUtterance(processedText);
+        
+        // 갤럭시 최적 음성 선택
+        const englishVoice = voices.find(voice => 
+          voice.lang === 'en-US' && voice.localService === false
+        ) || voices.find(voice => 
+          voice.lang.startsWith('en-US')
+        ) || voices.find(voice => 
+          voice.lang.startsWith('en')
+        ) || voices[0];
+        
+        if (englishVoice) {
+          utterance.voice = englishVoice;
+          console.log(`✅ [갤럭시] 선택된 음성: ${englishVoice.name} (${englishVoice.lang}) - 로컬: ${englishVoice.localService}`);
+        } else {
+          console.warn('⚠️ [갤럭시] 영어 음성을 찾을 수 없음');
+        }
+        
+        // 갤럭시 최적화 설정
+        utterance.lang = 'en-US';
+        utterance.rate = 0.9;
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+        
+        // 갤럭시 전용 이벤트 핸들러
+        utterance.onstart = () => {
+          console.log(`🎯 [갤럭시] TTS 재생 시작 성공!`);
+        };
+        
+        utterance.onend = () => {
+          console.log(`✅ [갤럭시] TTS 재생 완료!`);
+        };
+        
+        utterance.onerror = (event) => {
+          console.error(`❌ [갤럭시] TTS 오류: ${event.error}`);
+          
+          if (event.error === 'not-allowed') {
+            console.error('🚫 [갤럭시] 오디오 권한이 거부되었습니다.');
+            console.error('📱 [갤럭시] 해결방법:');
+            console.error('   1. 브라우저 주소창 옆 🔒 아이콘 클릭');
+            console.error('   2. 소리 권한을 "허용"으로 변경');
+            console.error('   3. 페이지 새로고침');
+            alert('🔊 음성 재생 권한이 필요합니다.\n\n해결방법:\n1. 주소창 옆 🔒 아이콘 클릭\n2. 소리 권한을 "허용"으로 변경\n3. 페이지 새로고침');
+          } else if (event.error === 'network') {
+            console.error('🌐 [갤럭시] 네트워크 오류');
+          } else if (event.error === 'synthesis-failed') {
+            console.error('🔧 [갤럭시] 음성 합성 실패');
+          }
+        };
+        
+        // 갤럭시에서 사용자 제스처 보장하며 즉시 실행
         speechSynthesis.speak(utterance);
         console.log(`🚀 [갤럭시] speechSynthesis.speak() 호출 완료`);
         
-        // 갤럭시 Chrome에서 재생 상태 확인
+        // 갤럭시 재생 상태 모니터링
         setTimeout(() => {
           if (speechSynthesis.speaking) {
             console.log(`🎵 [갤럭시] 음성 재생 중... (정상)`);
+          } else if (speechSynthesis.pending) {
+            console.log(`⏳ [갤럭시] 음성 재생 대기 중...`);
           } else {
-            console.warn(`⚠️ [갤럭시] 음성 재생이 시작되지 않음`);
-            console.warn(`📋 디버깅 정보:`);
-            console.warn(`- speechSynthesis.pending: ${speechSynthesis.pending}`);
-            console.warn(`- speechSynthesis.paused: ${speechSynthesis.paused}`);
-            console.warn(`- 사용 가능한 음성: ${voices.length}개`);
+            console.warn(`⚠️ [갤럭시] 음성 재생 시작되지 않음`);
+            console.warn(`📋 [갤럭시] 상태 정보:`);
+            console.warn(`   - speaking: ${speechSynthesis.speaking}`);
+            console.warn(`   - pending: ${speechSynthesis.pending}`);
+            console.warn(`   - paused: ${speechSynthesis.paused}`);
           }
-        }, 500);
+        }, 800);
         
       } catch (error) {
-        console.error(`💥 [갤럭시] speechSynthesis.speak() 예외:`, error);
+        console.error(`💥 [갤럭시] TTS 초기화 오류:`, error);
       }
       
     } else {
-      console.error('❌ speechSynthesis API가 지원되지 않습니다.');
+      console.error('❌ [갤럭시] speechSynthesis API가 지원되지 않습니다.');
     }
   };
 
@@ -593,7 +700,7 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
       </div>
 
       {/* Main Content - SentenceCompletionMode와 동일한 스타일 */}
-      <div className="flex-1 flex flex-col p-2 max-w-sm mx-auto w-full overflow-auto" style={{ minHeight: '0' }}>
+      <div className="flex-1 flex flex-col p-2 max-w-sm mx-auto w-full" style={{ minHeight: '0', maxHeight: 'calc(100vh - 140px)', overflow: 'auto' }}>
         {/* Korean Sentence */}
         <div className="text-center mb-6">
           <p className="text-xl font-semibold text-gray-800">
@@ -735,8 +842,7 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
           </div>
         )}
         
-        {/* 극소 여백으로 버튼 근접 배치 */}
-        <div className="h-1"></div>
+        {/* 버튼을 화면에 보이도록 여백 제거 */}
       </div>
 
       {/* Bottom Button - SentenceCompletionMode와 동일한 스타일 */}
@@ -745,9 +851,9 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
         style={{ 
           paddingLeft: '16px', 
           paddingRight: '16px', 
-          paddingTop: '8px',
-          paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
-          minHeight: '60px'
+          paddingTop: '4px',
+          paddingBottom: 'max(4px, env(safe-area-inset-bottom))',
+          minHeight: '50px'
         }}
       >
         {!showResult ? (
