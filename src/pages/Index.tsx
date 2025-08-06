@@ -79,6 +79,7 @@ const Index = () => {
   };
 
   const handleBackToLevelSelect = () => {
+    console.log('Index: handleBackToLevelSelect 호출 - 레벨 선택 페이지로 이동');
     setSelectedLevel(null);
   };
 

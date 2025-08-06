@@ -501,38 +501,58 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
       // 안드로이드 호환성을 위해 기존 음성 취소
       speechSynthesis.cancel();
       
-      setTimeout(() => {
-        // 발음 개선을 위한 전처리
-        const processedText = preprocessForTTS(text);
-        console.log(`TTS 원본: "${text}" → 처리됨: "${processedText}"`);
+      // 안드로이드에서 음성 재생을 위한 더 긴 지연과 재시도 로직
+      const attemptSpeak = (retryCount = 0) => {
+        const maxRetries = 3;
         
-        const utterance = new SpeechSynthesisUtterance(processedText);
-        utterance.lang = 'en-US';
-        utterance.rate = 0.8;
-        
-        // 안드로이드에서 더 자연스러운 발음을 위한 설정
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        
-        // 안드로이드 Chrome 호환성 개선
-        utterance.onstart = () => {
-          console.log('TTS 시작');
-        };
-        
-        utterance.onend = () => {
-          console.log('TTS 완료');
-        };
-        
-        utterance.onerror = (event) => {
-          console.error('TTS 오류:', event.error);
-          // 오류 시 재시도
-          setTimeout(() => {
+        setTimeout(() => {
+          // 발음 개선을 위한 전처리
+          const processedText = preprocessForTTS(text);
+          console.log(`TTS 시도 ${retryCount + 1}: "${text}" → 처리됨: "${processedText}"`);
+          
+          const utterance = new SpeechSynthesisUtterance(processedText);
+          utterance.lang = 'en-US';
+          utterance.rate = 0.8;
+          utterance.pitch = 1.0;
+          utterance.volume = 1.0;
+          
+          // 안드로이드 갤럭시 호환성 개선
+          utterance.onstart = () => {
+            console.log(`TTS 시작 성공 (시도 ${retryCount + 1})`);
+          };
+          
+          utterance.onend = () => {
+            console.log(`TTS 완료 (시도 ${retryCount + 1})`);
+          };
+          
+          utterance.onerror = (event) => {
+            console.error(`TTS 오류 (시도 ${retryCount + 1}):`, event.error);
+            
+            // 최대 재시도 횟수 내에서 재시도
+            if (retryCount < maxRetries) {
+              console.log(`TTS 재시도 중... (${retryCount + 1}/${maxRetries})`);
+              attemptSpeak(retryCount + 1);
+            } else {
+              console.error('TTS 최종 실패 - 모든 재시도 완료');
+            }
+          };
+          
+          // 안드로이드에서 음성 활성화를 위한 사용자 제스처 보장
+          try {
             speechSynthesis.speak(utterance);
-          }, 100);
-        };
-        
-        speechSynthesis.speak(utterance);
-      }, 100); // 안드로이드에서 안정성을 위한 지연
+            console.log('speechSynthesis.speak() 호출 완료');
+          } catch (error) {
+            console.error('speechSynthesis.speak() 오류:', error);
+            if (retryCount < maxRetries) {
+              attemptSpeak(retryCount + 1);
+            }
+          }
+        }, 150 + (retryCount * 100)); // 점진적으로 지연 시간 증가
+      };
+      
+      attemptSpeak();
+    } else {
+      console.error('speechSynthesis 지원되지 않음');
     }
   };
 
@@ -607,7 +627,10 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
       <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <Button variant="ghost" onClick={onBack}>
+          <Button variant="ghost" onClick={() => {
+            console.log('SpeakingMode: 뒤로가기 버튼 클릭');
+            onBack();
+          }}>
             <ArrowLeft className="w-4 h-4 mr-2" />
             뒤로가기
           </Button>

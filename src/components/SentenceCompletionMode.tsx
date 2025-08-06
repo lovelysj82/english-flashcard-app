@@ -167,63 +167,74 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
   };
 
   const handleTouchStart = (e: React.TouchEvent, index: number) => {
+    e.stopPropagation();
     const touch = e.touches[0];
     setTouchStartPos({ x: touch.clientX, y: touch.clientY });
-    
-    // 짧은 지연 후 드래그 시작 (더 부드러운 감지)
-    setTimeout(() => {
-      if (touchStartPos) {
-        setDraggedIndex(index);
-        setIsDragging(true);
-        console.log(`터치 드래그 시작: index=${index}`);
-      }
-    }, 100);
+    setDraggedIndex(index);
+    setIsDragging(false);
+    console.log(`터치 시작: index=${index}, 위치: (${touch.clientX}, ${touch.clientY})`);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (!touchStartPos) return;
+    if (!touchStartPos || draggedIndex === null) return;
     
     const touch = e.touches[0];
     const deltaX = Math.abs(touch.clientX - touchStartPos.x);
     const deltaY = Math.abs(touch.clientY - touchStartPos.y);
     
-    // 10px 이상 움직이면 드래그로 판단
-    if (deltaX > 10 || deltaY > 10) {
+    // 5px 이상 움직이면 드래그로 판단 (더 민감하게)
+    if (deltaX > 5 || deltaY > 5) {
       e.preventDefault(); // 스크롤 방지
-      setIsDragging(true);
+      if (!isDragging) {
+        setIsDragging(true);
+        console.log(`드래그 시작됨: index=${draggedIndex}`);
+      }
     }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (draggedIndex === null || !touchStartPos || !isDragging) {
-      // 드래그가 아닌 경우 클릭으로 처리
+    e.stopPropagation();
+    
+    if (draggedIndex === null) {
       setTouchStartPos(null);
-      setDraggedIndex(null);
       setIsDragging(false);
       return;
     }
 
     const touch = e.changedTouches[0];
-    const element = document.elementFromPoint(touch.clientX, touch.clientY);
+    console.log(`터치 종료: 위치: (${touch.clientX}, ${touch.clientY}), 드래그 중: ${isDragging}`);
     
-    // 드롭 대상 찾기
-    let dropTarget = element;
-    let targetIndex = -1;
-    
-    while (dropTarget && targetIndex === -1) {
-      const dropIndex = dropTarget.getAttribute('data-drop-index');
-      if (dropIndex !== null) {
-        targetIndex = parseInt(dropIndex);
-        break;
+    if (!isDragging) {
+      // 드래그가 아닌 경우 클릭으로 처리 (단어 제거)
+      console.log(`클릭으로 인식: index=${draggedIndex}`);
+      handleSelectedWordClick(draggedIndex);
+    } else {
+      // 드래그인 경우 드롭 처리
+      const element = document.elementFromPoint(touch.clientX, touch.clientY);
+      console.log(`드롭 대상 요소:`, element);
+      
+      // 드롭 대상 찾기
+      let dropTarget = element;
+      let targetIndex = -1;
+      
+      while (dropTarget && targetIndex === -1) {
+        const dropIndex = dropTarget.getAttribute('data-drop-index');
+        if (dropIndex !== null) {
+          targetIndex = parseInt(dropIndex);
+          break;
+        }
+        dropTarget = dropTarget.parentElement;
       }
-      dropTarget = dropTarget.parentElement;
+      
+      if (targetIndex !== -1) {
+        console.log(`드롭 처리: draggedIndex=${draggedIndex}, targetIndex=${targetIndex}`);
+        moveWord(draggedIndex, targetIndex);
+      } else {
+        console.log('유효한 드롭 대상을 찾지 못함');
+      }
     }
     
-    if (targetIndex !== -1) {
-      console.log(`터치 드롭: draggedIndex=${draggedIndex}, targetIndex=${targetIndex}`);
-      moveWord(draggedIndex, targetIndex);
-    }
-    
+    // 상태 초기화
     setDraggedIndex(null);
     setTouchStartPos(null);
     setIsDragging(false);
@@ -531,38 +542,58 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
       // 안드로이드 호환성을 위해 기존 음성 취소
       speechSynthesis.cancel();
       
-      setTimeout(() => {
-        // 발음 개선을 위한 전처리
-        const processedText = preprocessForTTS(text);
-        console.log(`TTS 원본: "${text}" → 처리됨: "${processedText}"`);
+      // 안드로이드에서 음성 재생을 위한 더 긴 지연과 재시도 로직
+      const attemptSpeak = (retryCount = 0) => {
+        const maxRetries = 3;
         
-        const utterance = new SpeechSynthesisUtterance(processedText);
-        utterance.lang = 'en-US';
-        utterance.rate = 0.8;
-        
-        // 안드로이드에서 더 자연스러운 발음을 위한 설정
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-        
-        // 안드로이드 Chrome 호환성 개선
-        utterance.onstart = () => {
-          console.log('TTS 시작');
-        };
-        
-        utterance.onend = () => {
-          console.log('TTS 완료');
-        };
-        
-        utterance.onerror = (event) => {
-          console.error('TTS 오류:', event.error);
-          // 오류 시 재시도
-          setTimeout(() => {
+        setTimeout(() => {
+          // 발음 개선을 위한 전처리
+          const processedText = preprocessForTTS(text);
+          console.log(`TTS 시도 ${retryCount + 1}: "${text}" → 처리됨: "${processedText}"`);
+          
+          const utterance = new SpeechSynthesisUtterance(processedText);
+          utterance.lang = 'en-US';
+          utterance.rate = 0.8;
+          utterance.pitch = 1.0;
+          utterance.volume = 1.0;
+          
+          // 안드로이드 갤럭시 호환성 개선
+          utterance.onstart = () => {
+            console.log(`TTS 시작 성공 (시도 ${retryCount + 1})`);
+          };
+          
+          utterance.onend = () => {
+            console.log(`TTS 완료 (시도 ${retryCount + 1})`);
+          };
+          
+          utterance.onerror = (event) => {
+            console.error(`TTS 오류 (시도 ${retryCount + 1}):`, event.error);
+            
+            // 최대 재시도 횟수 내에서 재시도
+            if (retryCount < maxRetries) {
+              console.log(`TTS 재시도 중... (${retryCount + 1}/${maxRetries})`);
+              attemptSpeak(retryCount + 1);
+            } else {
+              console.error('TTS 최종 실패 - 모든 재시도 완료');
+            }
+          };
+          
+          // 안드로이드에서 음성 활성화를 위한 사용자 제스처 보장
+          try {
             speechSynthesis.speak(utterance);
-          }, 100);
-        };
-        
-        speechSynthesis.speak(utterance);
-      }, 100); // 안드로이드에서 안정성을 위한 지연
+            console.log('speechSynthesis.speak() 호출 완료');
+          } catch (error) {
+            console.error('speechSynthesis.speak() 오류:', error);
+            if (retryCount < maxRetries) {
+              attemptSpeak(retryCount + 1);
+            }
+          }
+        }, 150 + (retryCount * 100)); // 점진적으로 지연 시간 증가
+      };
+      
+      attemptSpeak();
+    } else {
+      console.error('speechSynthesis 지원되지 않음');
     }
   };
 
@@ -628,10 +659,13 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
     : 0;
 
   return (
-    <div className="h-screen bg-background flex flex-col overflow-hidden">
+    <div className="h-screen bg-background flex flex-col" style={{ maxHeight: '100vh', minHeight: '100vh' }}>
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b flex-shrink-0">
-        <Button variant="ghost" size="icon" onClick={onBack}>
+      <div className="flex items-center justify-between p-2 border-b flex-shrink-0">
+        <Button variant="ghost" size="icon" onClick={() => {
+          console.log('SentenceCompletionMode: 뒤로가기 버튼 클릭');
+          onBack();
+        }}>
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="flex-1 mx-3">
@@ -648,7 +682,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col p-3 max-w-sm mx-auto w-full" style={{ minHeight: '0' }}>
+      <div className="flex-1 flex flex-col p-2 max-w-sm mx-auto w-full overflow-auto" style={{ minHeight: '0' }}>
         {/* Korean Sentence */}
         <div className="text-center mb-6">
           <p className="text-xl font-semibold text-gray-800">
@@ -786,14 +820,15 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         <div className="flex-1"></div>
       </div>
 
-      {/* Bottom Button - 아이폰 Safe Area 고려 */}
+      {/* Bottom Button - 아이폰 최적화 */}
       <div 
         className="flex-shrink-0 bg-background border-t border-gray-200"
         style={{ 
-          paddingLeft: '12px', 
-          paddingRight: '12px', 
-          paddingTop: '12px',
-          paddingBottom: 'max(12px, env(safe-area-inset-bottom))'
+          paddingLeft: '16px', 
+          paddingRight: '16px', 
+          paddingTop: '8px',
+          paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
+          minHeight: '60px'
         }}
       >
         {!showResult ? (
