@@ -60,29 +60,48 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       const recognitionInstance = new SpeechRecognition();
-      recognitionInstance.continuous = false;
-      recognitionInstance.interimResults = false;
+      
+      // 수동 종료를 위한 설정 변경
+      recognitionInstance.continuous = true; // 연속 음성인식 활성화
+      recognitionInstance.interimResults = true; // 중간 결과도 받기
       recognitionInstance.lang = 'en-US';
 
       recognitionInstance.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setSpokenText(transcript);
-        setIsListening(false);
+        // 가장 최신의 최종 결과만 사용
+        let finalTranscript = '';
+        let interimTranscript = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+        
+        // 최종 결과가 있으면 그것을 사용, 없으면 중간 결과 사용
+        const resultText = finalTranscript || interimTranscript;
+        
+        if (resultText.trim()) {
+          setSpokenText(resultText.trim());
+          console.log(`🎤 음성 인식 결과: "${resultText.trim()}" (최종: ${!!finalTranscript})`);
+        }
       };
 
       recognitionInstance.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
+        console.error('🚫 Speech recognition error:', event.error);
         setIsListening(false);
-        // 음성 인식 오류 처리 (팝업 제거됨)
       };
 
       recognitionInstance.onend = () => {
+        console.log('🔚 음성 인식 종료됨');
         setIsListening(false);
       };
 
       setRecognition(recognitionInstance);
     } else {
-      console.error('음성 인식 지원되지 않음');
+      console.error('❌ 음성 인식 지원되지 않음');
     }
   }, []);
 
@@ -301,91 +320,64 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
   const handleNext = () => {
     const currentSentenceList = isReviewMode ? reviewSentences : levelSentences;
     
-    console.log(`handleNext 호출 - wrongAnswers 개수: ${wrongAnswers.size}, 틀린 문제들:`, Array.from(wrongAnswers));
-    console.log(`현재 모드: ${isReviewMode ? '복습' : '첫 패스'}, 현재 인덱스: ${currentSentenceIndex}, 총 문장 수: ${currentSentenceList.length}`);
+    console.log(`🔄 handleNext 호출 - wrongAnswers 개수: ${wrongAnswers.size}, 틀린 문제들:`, Array.from(wrongAnswers));
+    console.log(`📋 현재 모드: ${isReviewMode ? '복습' : '첫 패스'}, 현재 인덱스: ${currentSentenceIndex}, 총 문장 수: ${currentSentenceList.length}`);
     
-    if (wrongAnswers.size > 0 && !isReviewMode) {
-      // Start review mode for wrong answers
-      console.log(`>>> 조건 1 실행: 복습 모드 시작`);
+    // 조건 분기 순서를 명확하게 정리
+    
+    // 1. 복습 모드에서 모든 문제를 맞춘 경우 (레벨 완료)
+    if (isReviewMode && wrongAnswers.size === 0) {
+      console.log(`✅ 조건 1 실행: 복습 모드에서 모든 문제 완료 → 레벨 완료`);
+      setLevelCompleted(true);
+      saveProgress();
+      return; // 더 이상 진행하지 않음
+    }
+    
+    // 2. 첫 패스에서 모든 문제를 맞춘 경우 (레벨 완료)
+    if (!isReviewMode && wrongAnswers.size === 0 && currentSentenceIndex + 1 >= levelSentences.length) {
+      console.log(`✅ 조건 2 실행: 첫 패스에서 모든 문제 완료 → 레벨 완료`);
+      setLevelCompleted(true);
+      saveProgress();
+      return; // 더 이상 진행하지 않음
+    }
+    
+    // 3. 첫 패스 완료 후 틀린 문제가 있으면 복습 모드 시작
+    if (!isReviewMode && currentSentenceIndex + 1 >= levelSentences.length && wrongAnswers.size > 0) {
+      console.log(`🔄 조건 3 실행: 첫 패스 완료 → 복습 모드 시작 (틀린 문제 ${wrongAnswers.size}개)`);
       setIsReviewMode(true);
-      setCurrentSentenceIndex(0); // 복습 시 첫 번째 틀린 문제부터 시작
-    } else if (isReviewMode && wrongAnswers.size === 0) {
-      // 복습 모드에서 모든 문제 완료
-      console.log(`>>> 조건 2 실행: 복습 모드에서 모든 문제 완료`);
-      setLevelCompleted(true);
-      saveProgress(); // 진도 저장
-      
-      // 다음 레벨이 존재하는지 확인
-      const nextLevel = currentLevel + 1;
-      const nextLevelSentences = sentences.filter(s => s.level === nextLevel);
-      const hasNextLevel = nextLevelSentences.length > 0;
-      const allLevels = [...new Set(sentences.map(s => s.level))].sort();
-      const maxLevel = Math.max(...allLevels);
-      
-      console.log(`=== 복습 완료 판정 디버깅 ===`);
-      console.log(`현재 레벨: ${currentLevel}`);
-      console.log(`다음 레벨: ${nextLevel}`);
-      console.log(`다음 레벨 문장 개수: ${nextLevelSentences.length}`);
-      console.log(`hasNextLevel: ${hasNextLevel}`);
-      console.log(`=== 복습 디버깅 끝 ===`);
-      
-      if (hasNextLevel) {
-        // 레벨 완료 처리
-      } else {
-        // 모든 레벨 완료 처리
-      }
-    } else {
-      // 복습 모드에서 마지막 문제까지 완료했을 때
-      console.log(`>>> 조건 4 실행: 복습 모드에서 마지막 문제까지 완료했을 때`);
-      console.log(`복습 모드 라운드 완료 - wrongAnswers 개수: ${wrongAnswers.size}`);
-      
-      if (wrongAnswers.size === 0) {
-        console.log("복습 모드에서 모든 문제 완료 - 이 블록은 실행되지 않아야 함");
-      } else {
-        // 아직 틀린 문제가 있음 - 복습 모드를 처음부터 다시 시작
-        console.log(`복습 모드 재시작 - 틀린 문제 ${wrongAnswers.size}개`);
-        setCurrentSentenceIndex(0);
-        // 복습 계속 처리
-      }
+      setCurrentSentenceIndex(0);
+      setSpokenText("");
+      setShowResult(false);
+      setIsEditing(false);
+      return;
     }
     
-    if (wrongAnswers.size === 0) {
-      // 첫 번째 학습 완료 (복습 모드가 아닌 경우)
-      console.log(`>>> 조건 3 실행: 첫 번째 학습 완료 (복습 모드가 아닌 경우)`);
-      setLevelCompleted(true);
-      saveProgress(); // 진도 저장
-      
-      // 다음 레벨이 존재하는지 확인
-      const nextLevel = currentLevel + 1;
-      const nextLevelSentences = sentences.filter(s => s.level === nextLevel);
-      const hasNextLevel = nextLevelSentences.length > 0;
-      const allLevels = [...new Set(sentences.map(s => s.level))].sort();
-      const maxLevel = Math.max(...allLevels);
-      
-      console.log(`=== 자동 디버깅 ===`);
-      console.log(`현재 레벨: ${currentLevel}`);
-      console.log(`최대 레벨: ${maxLevel}`);
-      console.log(`사용 가능한 레벨들:`, allLevels);
-      console.log(`다음 레벨 문장 개수: ${nextLevelSentences.length}`);
-      console.log(`다음 레벨 문장들:`, nextLevelSentences.map(s => s.id));
-      console.log(`hasNextLevel: ${hasNextLevel}`);
-      console.log(`=== 자동 디버깅 끝 ===`);
-      
-      if (hasNextLevel) {
-        // 레벨 완료 처리
-      } else {
-        // 모든 레벨 완료 처리
-      }
-    } else if (currentSentenceIndex + 1 < currentSentenceList.length) {
-      // 같은 모드(첫 패스 또는 복습)에서 다음 문제로 이동
-      console.log(`>>> 조건 5 실행: 같은 모드에서 다음 문제로 이동`);
+    // 4. 복습 모드에서 마지막 문제까지 완료했지만 아직 틀린 문제가 있는 경우
+    if (isReviewMode && currentSentenceIndex + 1 >= reviewSentences.length && wrongAnswers.size > 0) {
+      console.log(`🔄 조건 4 실행: 복습 모드 재시작 (아직 틀린 문제 ${wrongAnswers.size}개)`);
+      setCurrentSentenceIndex(0);
+      setSpokenText("");
+      setShowResult(false);
+      setIsEditing(false);
+      return;
+    }
+    
+    // 5. 일반적인 다음 문제로 이동
+    if (currentSentenceIndex + 1 < currentSentenceList.length) {
+      console.log(`➡️ 조건 5 실행: 다음 문제로 이동 (${currentSentenceIndex + 1}/${currentSentenceList.length})`);
       setCurrentSentenceIndex(currentSentenceIndex + 1);
+      setSpokenText("");
+      setShowResult(false);
+      setIsEditing(false);
+      return;
     }
     
-    // 상태 초기화
-    setSpokenText("");
-    setShowResult(false);
-    setIsEditing(false);
+    // 6. 예상치 못한 경우 (디버깅용)
+    console.error(`❌ 예상치 못한 handleNext 상황:`);
+    console.error(`- isReviewMode: ${isReviewMode}`);
+    console.error(`- wrongAnswers.size: ${wrongAnswers.size}`);
+    console.error(`- currentSentenceIndex: ${currentSentenceIndex}`);
+    console.error(`- currentSentenceList.length: ${currentSentenceList.length}`);
   };
 
   const handleNextLevel = () => {
@@ -417,89 +409,86 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
 
   const speakText = (text: string) => {
     if ('speechSynthesis' in window) {
-      // 안드로이드 갤럭시 완벽 호환을 위한 최종 수정
+      console.log(`🎵 [갤럭시 TTS] 음성 재생 시작: "${text}"`);
+      
+      // 갤럭시 Chrome/Samsung Internet 호환성 강화
       speechSynthesis.cancel();
       
-      // voices가 로딩될 때까지 기다리기 (갤럭시 필수)
-      const waitForVoices = () => {
-        return new Promise<void>((resolve) => {
-          const voices = speechSynthesis.getVoices();
-          if (voices.length > 0) {
-            resolve();
-          } else {
-            speechSynthesis.onvoiceschanged = () => {
-              resolve();
-            };
-            // 최대 2초 대기
-            setTimeout(resolve, 2000);
-          }
-        });
+      // 사용자 제스처 보장을 위한 즉시 실행
+      const processedText = preprocessForTTS(text);
+      console.log(`🔄 TTS 전처리: "${text}" → "${processedText}"`);
+      
+      const utterance = new SpeechSynthesisUtterance(processedText);
+      
+      // 갤럭시 최적화 설정
+      const voices = speechSynthesis.getVoices();
+      console.log(`🎤 사용 가능한 음성 개수: ${voices.length}`);
+      
+      // 영어 음성 우선 선택
+      const englishVoice = voices.find(voice => 
+        voice.lang.includes('en-US')
+      ) || voices.find(voice => 
+        voice.lang.includes('en')
+      ) || voices[0];
+      
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+        console.log(`✅ 선택된 음성: ${englishVoice.name} (${englishVoice.lang})`);
+      } else {
+        console.warn('⚠️ 영어 음성을 찾을 수 없음');
+      }
+      
+      utterance.lang = 'en-US';
+      utterance.rate = 0.8;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      
+      // 갤럭시 전용 이벤트 핸들러
+      utterance.onstart = () => {
+        console.log(`🎯 [갤럭시] TTS 재생 시작 성공!`);
       };
       
-      const attemptSpeak = async (retryCount = 0) => {
-        const maxRetries = 5; // 재시도 횟수 증가
+      utterance.onend = () => {
+        console.log(`✅ [갤럭시] TTS 재생 완료!`);
+      };
+      
+      utterance.onerror = (event) => {
+        console.error(`❌ [갤럭시] TTS 오류:`, event.error);
+        console.error(`오류 상세:`, event);
         
-        try {
-          // 갤럭시에서 voices 로딩 대기
-          await waitForVoices();
-          
-          setTimeout(() => {
-            const processedText = preprocessForTTS(text);
-            console.log(`[갤럭시 TTS] 시도 ${retryCount + 1}: "${text}" → "${processedText}"`);
-            
-            const utterance = new SpeechSynthesisUtterance(processedText);
-            
-            // 갤럭시 최적화 설정
-            const voices = speechSynthesis.getVoices();
-            const englishVoice = voices.find(voice => 
-              voice.lang.includes('en') && !voice.localService
-            ) || voices.find(voice => voice.lang.includes('en'));
-            
-            if (englishVoice) {
-              utterance.voice = englishVoice;
-              console.log(`[갤럭시 TTS] 사용 음성: ${englishVoice.name}`);
-            }
-            
-            utterance.lang = 'en-US';
-            utterance.rate = 0.7; // 갤럭시에서 더 안정적인 속도
-            utterance.pitch = 1.0;
-            utterance.volume = 1.0;
-            
-            utterance.onstart = () => {
-              console.log(`[갤럭시 TTS] ✅ 성공 (시도 ${retryCount + 1})`);
-            };
-            
-            utterance.onend = () => {
-              console.log(`[갤럭시 TTS] 완료 (시도 ${retryCount + 1})`);
-            };
-            
-            utterance.onerror = (event) => {
-              console.error(`[갤럭시 TTS] ❌ 오류 (시도 ${retryCount + 1}):`, event.error);
-              
-              if (retryCount < maxRetries) {
-                console.log(`[갤럭시 TTS] 🔄 재시도... (${retryCount + 1}/${maxRetries})`);
-                setTimeout(() => attemptSpeak(retryCount + 1), 200);
-              } else {
-                console.error('[갤럭시 TTS] 💥 최종 실패');
-              }
-            };
-            
-            speechSynthesis.speak(utterance);
-            console.log('[갤럭시 TTS] speak() 호출 완료');
-            
-          }, 100 + (retryCount * 50));
-          
-        } catch (error) {
-          console.error(`[갤럭시 TTS] Exception (시도 ${retryCount + 1}):`, error);
-          if (retryCount < maxRetries) {
-            setTimeout(() => attemptSpeak(retryCount + 1), 200);
-          }
+        // 갤럭시 권한 문제 진단
+        if (event.error === 'not-allowed') {
+          console.error('🚫 [갤럭시] 오디오 권한이 거부되었습니다.');
+          console.error('📱 해결방법: 브라우저 설정 → 사이트 권한 → 오디오 허용');
+        } else if (event.error === 'network') {
+          console.error('🌐 [갤럭시] 네트워크 오류 - 온라인 TTS 서비스 문제');
         }
       };
       
-      attemptSpeak();
+      // 갤럭시에서 즉시 실행 (사용자 제스처 보장)
+      try {
+        speechSynthesis.speak(utterance);
+        console.log(`🚀 [갤럭시] speechSynthesis.speak() 호출 완료`);
+        
+        // 갤럭시 Chrome에서 재생 상태 확인
+        setTimeout(() => {
+          if (speechSynthesis.speaking) {
+            console.log(`🎵 [갤럭시] 음성 재생 중... (정상)`);
+          } else {
+            console.warn(`⚠️ [갤럭시] 음성 재생이 시작되지 않음`);
+            console.warn(`📋 디버깅 정보:`);
+            console.warn(`- speechSynthesis.pending: ${speechSynthesis.pending}`);
+            console.warn(`- speechSynthesis.paused: ${speechSynthesis.paused}`);
+            console.warn(`- 사용 가능한 음성: ${voices.length}개`);
+          }
+        }, 500);
+        
+      } catch (error) {
+        console.error(`💥 [갤럭시] speechSynthesis.speak() 예외:`, error);
+      }
+      
     } else {
-      console.error('[TTS] speechSynthesis 지원되지 않음');
+      console.error('❌ speechSynthesis API가 지원되지 않습니다.');
     }
   };
 
@@ -625,12 +614,36 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
                 >
                   <Volume2 className="w-5 h-5" />
                 </Button>
-                <span 
-                  className="text-lg font-medium text-blue-700 cursor-pointer"
-                  onClick={() => setIsEditing(true)}
-                >
-                  {spokenText}
-                </span>
+                {isEditing ? (
+                  <div className="flex-1 mx-2">
+                    <Input
+                      value={editedText}
+                      onChange={(e) => setEditedText(e.target.value)}
+                      className="text-center text-lg font-medium border-blue-300 focus:border-blue-500"
+                      placeholder="텍스트를 수정하세요"
+                      autoFocus
+                      onBlur={handleEditSave}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleEditSave();
+                        } else if (e.key === 'Escape') {
+                          handleEditCancel();
+                        }
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <span 
+                    className="text-lg font-medium text-blue-700 cursor-text px-2 py-1 rounded hover:bg-blue-100 transition-colors"
+                    onClick={() => {
+                      setEditedText(spokenText);
+                      setIsEditing(true);
+                    }}
+                    title="클릭하여 텍스트 수정"
+                  >
+                    {spokenText}
+                  </span>
+                )}
               </div>
             ) : (
               <div className="flex flex-wrap justify-center items-end gap-1">
@@ -640,43 +653,28 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
           </div>
         </div>
 
-        {/* 텍스트 편집 모드 */}
-        {isEditing && (
-          <div className="mb-4 p-4 bg-gray-50 rounded-lg">
-            <Input
-              value={editedText}
-              onChange={(e) => setEditedText(e.target.value)}
-              className="mb-3"
-              placeholder="텍스트를 수정하세요"
-            />
-            <div className="flex gap-2">
-              <Button onClick={handleEditSave} className="flex-1">
-                저장
-              </Button>
-              <Button onClick={handleEditCancel} variant="outline" className="flex-1">
-                취소
-              </Button>
-            </div>
-          </div>
-        )}
-
         {/* Voice Recognition Button */}
         <div className="text-center mb-6">
-          <Button
-            onClick={isListening ? stopListening : startListening}
-            className={`w-20 h-20 rounded-full ${
-              isListening 
-                ? 'bg-red-500 hover:bg-red-600' 
-                : 'bg-blue-500 hover:bg-blue-600'
-            } text-white`}
-            disabled={showResult}
-          >
-            {isListening ? (
-              <MicOff className="w-8 h-8" />
-            ) : (
-              <Mic className="w-8 h-8" />
-            )}
-          </Button>
+          <div className="flex flex-col items-center gap-2">
+            <Button
+              onClick={isListening ? stopListening : startListening}
+              className={`w-20 h-20 rounded-full ${
+                isListening 
+                  ? 'bg-red-500 hover:bg-red-600' 
+                  : 'bg-blue-500 hover:bg-blue-600'
+              } text-white transition-all duration-200`}
+              disabled={showResult}
+            >
+              {isListening ? (
+                <MicOff className="w-8 h-8" />
+              ) : (
+                <Mic className="w-8 h-8" />
+              )}
+            </Button>
+            <p className="text-sm text-gray-600">
+              {isListening ? '마이크를 다시 눌러서 종료' : '마이크 버튼을 클릭하고 말해보세요'}
+            </p>
+          </div>
         </div>
 
         {/* Result Display - 슬라이드 애니메이션으로 표시 */}
@@ -737,13 +735,13 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
           </div>
         )}
         
-        {/* 최소 여백만 유지 */}
-        <div className="h-4"></div>
+        {/* 극소 여백으로 버튼 근접 배치 */}
+        <div className="h-1"></div>
       </div>
 
       {/* Bottom Button - SentenceCompletionMode와 동일한 스타일 */}
       <div 
-        className="flex-shrink-0 bg-background border-t border-gray-200"
+        className="flex-shrink-0 bg-background border-t border-gray-200 flex items-center justify-center"
         style={{ 
           paddingLeft: '16px', 
           paddingRight: '16px', 

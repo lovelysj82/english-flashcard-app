@@ -539,89 +539,86 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
 
   const speakText = (text: string) => {
     if ('speechSynthesis' in window) {
-      // 안드로이드 갤럭시 완벽 호환을 위한 최종 수정
+      console.log(`🎵 [갤럭시 TTS] 음성 재생 시작: "${text}"`);
+      
+      // 갤럭시 Chrome/Samsung Internet 호환성 강화
       speechSynthesis.cancel();
       
-      // voices가 로딩될 때까지 기다리기 (갤럭시 필수)
-      const waitForVoices = () => {
-        return new Promise<void>((resolve) => {
-          const voices = speechSynthesis.getVoices();
-          if (voices.length > 0) {
-            resolve();
-          } else {
-            speechSynthesis.onvoiceschanged = () => {
-              resolve();
-            };
-            // 최대 2초 대기
-            setTimeout(resolve, 2000);
-          }
-        });
+      // 사용자 제스처 보장을 위한 즉시 실행
+      const processedText = preprocessForTTS(text);
+      console.log(`🔄 TTS 전처리: "${text}" → "${processedText}"`);
+      
+      const utterance = new SpeechSynthesisUtterance(processedText);
+      
+      // 갤럭시 최적화 설정
+      const voices = speechSynthesis.getVoices();
+      console.log(`🎤 사용 가능한 음성 개수: ${voices.length}`);
+      
+      // 영어 음성 우선 선택
+      const englishVoice = voices.find(voice => 
+        voice.lang.includes('en-US')
+      ) || voices.find(voice => 
+        voice.lang.includes('en')
+      ) || voices[0];
+      
+      if (englishVoice) {
+        utterance.voice = englishVoice;
+        console.log(`✅ 선택된 음성: ${englishVoice.name} (${englishVoice.lang})`);
+      } else {
+        console.warn('⚠️ 영어 음성을 찾을 수 없음');
+      }
+      
+      utterance.lang = 'en-US';
+      utterance.rate = 0.8;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      
+      // 갤럭시 전용 이벤트 핸들러
+      utterance.onstart = () => {
+        console.log(`🎯 [갤럭시] TTS 재생 시작 성공!`);
       };
       
-      const attemptSpeak = async (retryCount = 0) => {
-        const maxRetries = 5; // 재시도 횟수 증가
+      utterance.onend = () => {
+        console.log(`✅ [갤럭시] TTS 재생 완료!`);
+      };
+      
+      utterance.onerror = (event) => {
+        console.error(`❌ [갤럭시] TTS 오류:`, event.error);
+        console.error(`오류 상세:`, event);
         
-        try {
-          // 갤럭시에서 voices 로딩 대기
-          await waitForVoices();
-          
-          setTimeout(() => {
-            const processedText = preprocessForTTS(text);
-            console.log(`[갤럭시 TTS] 시도 ${retryCount + 1}: "${text}" → "${processedText}"`);
-            
-            const utterance = new SpeechSynthesisUtterance(processedText);
-            
-            // 갤럭시 최적화 설정
-            const voices = speechSynthesis.getVoices();
-            const englishVoice = voices.find(voice => 
-              voice.lang.includes('en') && !voice.localService
-            ) || voices.find(voice => voice.lang.includes('en'));
-            
-            if (englishVoice) {
-              utterance.voice = englishVoice;
-              console.log(`[갤럭시 TTS] 사용 음성: ${englishVoice.name}`);
-            }
-            
-            utterance.lang = 'en-US';
-            utterance.rate = 0.7; // 갤럭시에서 더 안정적인 속도
-            utterance.pitch = 1.0;
-            utterance.volume = 1.0;
-            
-            utterance.onstart = () => {
-              console.log(`[갤럭시 TTS] ✅ 성공 (시도 ${retryCount + 1})`);
-            };
-            
-            utterance.onend = () => {
-              console.log(`[갤럭시 TTS] 완료 (시도 ${retryCount + 1})`);
-            };
-            
-            utterance.onerror = (event) => {
-              console.error(`[갤럭시 TTS] ❌ 오류 (시도 ${retryCount + 1}):`, event.error);
-              
-              if (retryCount < maxRetries) {
-                console.log(`[갤럭시 TTS] 🔄 재시도... (${retryCount + 1}/${maxRetries})`);
-                setTimeout(() => attemptSpeak(retryCount + 1), 200);
-              } else {
-                console.error('[갤럭시 TTS] 💥 최종 실패');
-              }
-            };
-            
-            speechSynthesis.speak(utterance);
-            console.log('[갤럭시 TTS] speak() 호출 완료');
-            
-          }, 100 + (retryCount * 50));
-          
-        } catch (error) {
-          console.error(`[갤럭시 TTS] Exception (시도 ${retryCount + 1}):`, error);
-          if (retryCount < maxRetries) {
-            setTimeout(() => attemptSpeak(retryCount + 1), 200);
-          }
+        // 갤럭시 권한 문제 진단
+        if (event.error === 'not-allowed') {
+          console.error('🚫 [갤럭시] 오디오 권한이 거부되었습니다.');
+          console.error('📱 해결방법: 브라우저 설정 → 사이트 권한 → 오디오 허용');
+        } else if (event.error === 'network') {
+          console.error('🌐 [갤럭시] 네트워크 오류 - 온라인 TTS 서비스 문제');
         }
       };
       
-      attemptSpeak();
+      // 갤럭시에서 즉시 실행 (사용자 제스처 보장)
+      try {
+        speechSynthesis.speak(utterance);
+        console.log(`🚀 [갤럭시] speechSynthesis.speak() 호출 완료`);
+        
+        // 갤럭시 Chrome에서 재생 상태 확인
+        setTimeout(() => {
+          if (speechSynthesis.speaking) {
+            console.log(`🎵 [갤럭시] 음성 재생 중... (정상)`);
+          } else {
+            console.warn(`⚠️ [갤럭시] 음성 재생이 시작되지 않음`);
+            console.warn(`📋 디버깅 정보:`);
+            console.warn(`- speechSynthesis.pending: ${speechSynthesis.pending}`);
+            console.warn(`- speechSynthesis.paused: ${speechSynthesis.paused}`);
+            console.warn(`- 사용 가능한 음성: ${voices.length}개`);
+          }
+        }, 500);
+        
+      } catch (error) {
+        console.error(`💥 [갤럭시] speechSynthesis.speak() 예외:`, error);
+      }
+      
     } else {
-      console.error('[TTS] speechSynthesis 지원되지 않음');
+      console.error('❌ speechSynthesis API가 지원되지 않습니다.');
     }
   };
 
@@ -844,13 +841,13 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
           )}
         </div>
         
-        {/* 최소 여백만 유지 */}
-        <div className="h-4"></div>
+        {/* 극소 여백으로 버튼 근접 배치 */}
+        <div className="h-1"></div>
       </div>
 
       {/* Bottom Button - 아이폰 최적화 */}
       <div 
-        className="flex-shrink-0 bg-background border-t border-gray-200"
+        className="flex-shrink-0 bg-background border-t border-gray-200 flex items-center justify-center"
         style={{ 
           paddingLeft: '16px', 
           paddingRight: '16px', 
