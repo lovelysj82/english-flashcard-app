@@ -472,25 +472,63 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
   };
 
   const speakText = async (text: string) => {
-    console.log(`🎵 [갤럭시 TTS] 음성 재생 요청: "${text}"`);
+    // 브라우저 환경 감지 (카카오톡 인앱 브라우저 특별 처리)
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isKakaoInApp = userAgent.includes('kakaotalk');
+    const isSamsungBrowser = userAgent.includes('samsungbrowser');
+    const isAndroid = userAgent.includes('android');
     
-    // 갤럭시 오디오 권한 및 컨텍스트 확인
+    console.log(`🎵 [TTS] 음성 재생 요청: "${text}"`);
+    console.log(`📱 [TTS] 브라우저 환경:`, {
+      isKakaoInApp,
+      isSamsungBrowser,
+      isAndroid,
+      userAgent: userAgent.substring(0, 100)
+    });
+    
+    // 카카오톡 인앱 브라우저 특별 처리
+    if (isKakaoInApp) {
+      console.log('📱 [카카오톡] 인앱 브라우저 감지 - 특별 처리 시작');
+      
+      // 카카오톡 WebView에서 오디오 활성화를 위한 더 강력한 사용자 제스처 생성
+      try {
+        // 1. 더미 오디오 요소로 오디오 시스템 활성화
+        const dummyAudio = new Audio();
+        dummyAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAACAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA=='; // 무음 오디오
+        dummyAudio.volume = 0.01;
+        
+        const playPromise = dummyAudio.play();
+        if (playPromise) {
+          await playPromise.catch(() => {
+            console.log('📱 [카카오톡] 더미 오디오 재생 실패 (정상)');
+          });
+        }
+        
+        console.log('✅ [카카오톡] 오디오 시스템 활성화 완료');
+      } catch (dummyError) {
+        console.warn('⚠️ [카카오톡] 더미 오디오 활성화 실패:', dummyError);
+      }
+      
+      // 2. 강제 사용자 상호작용 대기 (카카오톡 필수)
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    
+    // 안드로이드/갤럭시 오디오 컨텍스트 활성화
     try {
-      // Web Audio API를 사용한 오디오 컨텍스트 활성화 (갤럭시 필수)
       if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
         const AudioContextClass = AudioContext || webkitAudioContext;
         const audioContext = new AudioContextClass();
         
         if (audioContext.state === 'suspended') {
-          console.log('🔧 [갤럭시] 오디오 컨텍스트 활성화 중...');
+          console.log(`🔧 [${isKakaoInApp ? '카카오톡' : '갤럭시'}] 오디오 컨텍스트 활성화 중...`);
           await audioContext.resume();
-          console.log(`✅ [갤럭시] 오디오 컨텍스트 활성화 완료: ${audioContext.state}`);
+          console.log(`✅ [${isKakaoInApp ? '카카오톡' : '갤럭시'}] 오디오 컨텍스트 활성화 완료: ${audioContext.state}`);
         }
         
-        audioContext.close(); // 리소스 정리
+        audioContext.close();
       }
     } catch (audioError) {
-      console.warn('⚠️ [갤럭시] 오디오 컨텍스트 활성화 실패:', audioError);
+      console.warn(`⚠️ [${isKakaoInApp ? '카카오톡' : '갤럭시'}] 오디오 컨텍스트 활성화 실패:`, audioError);
     }
 
     if ('speechSynthesis' in window) {
@@ -555,19 +593,33 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
         };
         
         utterance.onerror = (event) => {
-          console.error(`❌ [갤럭시] TTS 오류: ${event.error}`);
+          const browserType = isKakaoInApp ? '카카오톡' : (isSamsungBrowser ? '삼성브라우저' : '갤럭시');
+          console.error(`❌ [${browserType}] TTS 오류: ${event.error}`);
           
           if (event.error === 'not-allowed') {
-            console.error('🚫 [갤럭시] 오디오 권한이 거부되었습니다.');
-            console.error('📱 [갤럭시] 해결방법:');
-            console.error('   1. 브라우저 주소창 옆 🔒 아이콘 클릭');
-            console.error('   2. 소리 권한을 "허용"으로 변경');
-            console.error('   3. 페이지 새로고침');
-            alert('🔊 음성 재생 권한이 필요합니다.\n\n해결방법:\n1. 주소창 옆 🔒 아이콘 클릭\n2. 소리 권한을 "허용"으로 변경\n3. 페이지 새로고침');
+            console.error(`🚫 [${browserType}] 오디오 권한이 거부되었습니다.`);
+            
+            if (isKakaoInApp) {
+              console.error('📱 [카카오톡] 해결방법:');
+              console.error('   1. 카카오톡 설정 → 일반 → 인앱 브라우저 사용 OFF');
+              console.error('   2. 또는 "외부 브라우저에서 열기" 사용');
+              console.error('   3. 삼성 인터넷이나 Chrome으로 직접 접속');
+              alert('🔊 카카오톡에서 음성이 재생되지 않습니다.\n\n해결방법:\n1. 우상단 ⋯ → "외부 브라우저에서 열기"\n2. 삼성 인터넷이나 Chrome 사용\n\n(카카오톡 인앱 브라우저는 음성 재생 제한이 있습니다)');
+            } else {
+              console.error(`📱 [${browserType}] 해결방법:`);
+              console.error('   1. 브라우저 주소창 옆 🔒 아이콘 클릭');
+              console.error('   2. 소리 권한을 "허용"으로 변경');
+              console.error('   3. 페이지 새로고침');
+              alert('🔊 음성 재생 권한이 필요합니다.\n\n해결방법:\n1. 주소창 옆 🔒 아이콘 클릭\n2. 소리 권한을 "허용"으로 변경\n3. 페이지 새로고침');
+            }
           } else if (event.error === 'network') {
-            console.error('🌐 [갤럭시] 네트워크 오류');
+            console.error(`🌐 [${browserType}] 네트워크 오류`);
           } else if (event.error === 'synthesis-failed') {
-            console.error('🔧 [갤럭시] 음성 합성 실패');
+            console.error(`🔧 [${browserType}] 음성 합성 실패`);
+            
+            if (isKakaoInApp) {
+              console.error('💡 [카카오톡] 인앱 브라우저 제한 - 외부 브라우저 사용 권장');
+            }
           }
         };
         
@@ -679,7 +731,7 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
   return (
     <div className="h-screen bg-background flex flex-col" style={{ maxHeight: '100vh', minHeight: '100vh' }}>
       {/* Header - SentenceCompletionMode와 동일한 스타일 */}
-      <div className="flex items-center justify-between p-2 border-b flex-shrink-0">
+      <div className="flex items-center justify-between p-1 border-b flex-shrink-0">
         <Button variant="ghost" size="icon" onClick={() => {
           console.log('SpeakingMode: 뒤로가기 버튼 클릭');
           onBack();
@@ -700,7 +752,7 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
       </div>
 
       {/* Main Content - SentenceCompletionMode와 동일한 스타일 */}
-      <div className="flex-1 flex flex-col p-2 max-w-sm mx-auto w-full" style={{ minHeight: '0', maxHeight: 'calc(100vh - 140px)', overflow: 'auto' }}>
+      <div className="flex-1 flex flex-col p-1 max-w-sm mx-auto w-full" style={{ minHeight: '0', maxHeight: 'calc(100vh - 110px)', overflow: 'auto' }}>
         {/* Korean Sentence */}
         <div className="text-center mb-6">
           <p className="text-xl font-semibold text-gray-800">
@@ -851,9 +903,9 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
         style={{ 
           paddingLeft: '16px', 
           paddingRight: '16px', 
-          paddingTop: '4px',
-          paddingBottom: 'max(4px, env(safe-area-inset-bottom))',
-          minHeight: '50px'
+          paddingTop: '2px',
+          paddingBottom: 'max(2px, env(safe-area-inset-bottom))',
+          minHeight: '40px'
         }}
       >
         {!showResult ? (
