@@ -15,6 +15,35 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [dataError, setDataError] = useState<string | null>(null);
 
+  // 브라우저 뒤로가기 버튼 처리를 위한 History API
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      console.log('🔙 브라우저 뒤로가기 감지:', event.state);
+      
+      if (event.state) {
+        // History state가 있으면 해당 상태로 복원
+        setSelectedMode(event.state.mode || null);
+        setSelectedLevel(event.state.level || null);
+      } else {
+        // History state가 없으면 홈으로
+        setSelectedMode(null);
+        setSelectedLevel(null);
+      }
+    };
+
+    // 초기 상태를 history에 추가
+    if (typeof window !== 'undefined') {
+      window.history.replaceState({ mode: null, level: null }, '', window.location.href);
+      window.addEventListener('popstate', handlePopState);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('popstate', handlePopState);
+      }
+    };
+  }, []);
+
   // 데이터 로딩
   useEffect(() => {
     const loadData = async () => {
@@ -66,21 +95,37 @@ const Index = () => {
     console.log(`Index: 모드 선택됨 - ${mode}`);
     setSelectedMode(mode);
     console.log(`Index: selectedMode 상태 업데이트됨 - ${mode}`);
+    
+    // 🔙 History에 모드 선택 상태 추가
+    window.history.pushState({ mode, level: null }, '', window.location.href);
+    console.log(`📌 History 추가: mode=${mode}, level=null`);
   };
 
   const handleLevelSelect = (level: number) => {
     console.log(`Index: 레벨 ${level} 선택됨`);
     setSelectedLevel(level);
+    
+    // 🔙 History에 레벨 선택 상태 추가
+    window.history.pushState({ mode: selectedMode, level }, '', window.location.href);
+    console.log(`📌 History 추가: mode=${selectedMode}, level=${level}`);
   };
 
   const handleBackToModeSelect = () => {
     setSelectedMode(null);
     setSelectedLevel(null);
+    
+    // 🔙 History 뒤로가기 또는 홈 상태로 변경
+    window.history.pushState({ mode: null, level: null }, '', window.location.href);
+    console.log(`📌 History 추가: mode=null, level=null (홈)`);
   };
 
   const handleBackToLevelSelect = () => {
     console.log('Index: handleBackToLevelSelect 호출 - 레벨 선택 페이지로 이동');
     setSelectedLevel(null);
+    
+    // 🔙 History에 레벨 선택 페이지 상태 추가
+    window.history.pushState({ mode: selectedMode, level: null }, '', window.location.href);
+    console.log(`📌 History 추가: mode=${selectedMode}, level=null (레벨선택)`);
   };
 
   console.log(`Index 렌더링: selectedMode=${selectedMode}, selectedLevel=${selectedLevel}, 데이터 수=${sentences.length}`);

@@ -182,12 +182,12 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
     const deltaX = Math.abs(touch.clientX - touchStartPos.x);
     const deltaY = Math.abs(touch.clientY - touchStartPos.y);
     
-    // 5px 이상 움직이면 드래그로 판단 (더 민감하게)
-    if (deltaX > 5 || deltaY > 5) {
+    // 2px 이상 움직이면 드래그로 판단 (매우 민감하게)
+    if (deltaX > 2 || deltaY > 2) {
       e.preventDefault(); // 스크롤 방지
       if (!isDragging) {
         setIsDragging(true);
-        console.log(`드래그 시작됨: index=${draggedIndex}`);
+        console.log(`✨ 부드러운 드래그 시작: index=${draggedIndex}, 이동거리=${Math.max(deltaX, deltaY)}px`);
       }
     }
   };
@@ -539,61 +539,89 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
 
   const speakText = (text: string) => {
     if ('speechSynthesis' in window) {
-      // 안드로이드 호환성을 위해 기존 음성 취소
+      // 안드로이드 갤럭시 완벽 호환을 위한 최종 수정
       speechSynthesis.cancel();
       
-      // 안드로이드에서 음성 재생을 위한 더 긴 지연과 재시도 로직
-      const attemptSpeak = (retryCount = 0) => {
-        const maxRetries = 3;
-        
-        setTimeout(() => {
-          // 발음 개선을 위한 전처리
-          const processedText = preprocessForTTS(text);
-          console.log(`TTS 시도 ${retryCount + 1}: "${text}" → 처리됨: "${processedText}"`);
-          
-          const utterance = new SpeechSynthesisUtterance(processedText);
-          utterance.lang = 'en-US';
-          utterance.rate = 0.8;
-          utterance.pitch = 1.0;
-          utterance.volume = 1.0;
-          
-          // 안드로이드 갤럭시 호환성 개선
-          utterance.onstart = () => {
-            console.log(`TTS 시작 성공 (시도 ${retryCount + 1})`);
-          };
-          
-          utterance.onend = () => {
-            console.log(`TTS 완료 (시도 ${retryCount + 1})`);
-          };
-          
-          utterance.onerror = (event) => {
-            console.error(`TTS 오류 (시도 ${retryCount + 1}):`, event.error);
-            
-            // 최대 재시도 횟수 내에서 재시도
-            if (retryCount < maxRetries) {
-              console.log(`TTS 재시도 중... (${retryCount + 1}/${maxRetries})`);
-              attemptSpeak(retryCount + 1);
-            } else {
-              console.error('TTS 최종 실패 - 모든 재시도 완료');
-            }
-          };
-          
-          // 안드로이드에서 음성 활성화를 위한 사용자 제스처 보장
-          try {
-            speechSynthesis.speak(utterance);
-            console.log('speechSynthesis.speak() 호출 완료');
-          } catch (error) {
-            console.error('speechSynthesis.speak() 오류:', error);
-            if (retryCount < maxRetries) {
-              attemptSpeak(retryCount + 1);
-            }
+      // voices가 로딩될 때까지 기다리기 (갤럭시 필수)
+      const waitForVoices = () => {
+        return new Promise<void>((resolve) => {
+          const voices = speechSynthesis.getVoices();
+          if (voices.length > 0) {
+            resolve();
+          } else {
+            speechSynthesis.onvoiceschanged = () => {
+              resolve();
+            };
+            // 최대 2초 대기
+            setTimeout(resolve, 2000);
           }
-        }, 150 + (retryCount * 100)); // 점진적으로 지연 시간 증가
+        });
+      };
+      
+      const attemptSpeak = async (retryCount = 0) => {
+        const maxRetries = 5; // 재시도 횟수 증가
+        
+        try {
+          // 갤럭시에서 voices 로딩 대기
+          await waitForVoices();
+          
+          setTimeout(() => {
+            const processedText = preprocessForTTS(text);
+            console.log(`[갤럭시 TTS] 시도 ${retryCount + 1}: "${text}" → "${processedText}"`);
+            
+            const utterance = new SpeechSynthesisUtterance(processedText);
+            
+            // 갤럭시 최적화 설정
+            const voices = speechSynthesis.getVoices();
+            const englishVoice = voices.find(voice => 
+              voice.lang.includes('en') && !voice.localService
+            ) || voices.find(voice => voice.lang.includes('en'));
+            
+            if (englishVoice) {
+              utterance.voice = englishVoice;
+              console.log(`[갤럭시 TTS] 사용 음성: ${englishVoice.name}`);
+            }
+            
+            utterance.lang = 'en-US';
+            utterance.rate = 0.7; // 갤럭시에서 더 안정적인 속도
+            utterance.pitch = 1.0;
+            utterance.volume = 1.0;
+            
+            utterance.onstart = () => {
+              console.log(`[갤럭시 TTS] ✅ 성공 (시도 ${retryCount + 1})`);
+            };
+            
+            utterance.onend = () => {
+              console.log(`[갤럭시 TTS] 완료 (시도 ${retryCount + 1})`);
+            };
+            
+            utterance.onerror = (event) => {
+              console.error(`[갤럭시 TTS] ❌ 오류 (시도 ${retryCount + 1}):`, event.error);
+              
+              if (retryCount < maxRetries) {
+                console.log(`[갤럭시 TTS] 🔄 재시도... (${retryCount + 1}/${maxRetries})`);
+                setTimeout(() => attemptSpeak(retryCount + 1), 200);
+              } else {
+                console.error('[갤럭시 TTS] 💥 최종 실패');
+              }
+            };
+            
+            speechSynthesis.speak(utterance);
+            console.log('[갤럭시 TTS] speak() 호출 완료');
+            
+          }, 100 + (retryCount * 50));
+          
+        } catch (error) {
+          console.error(`[갤럭시 TTS] Exception (시도 ${retryCount + 1}):`, error);
+          if (retryCount < maxRetries) {
+            setTimeout(() => attemptSpeak(retryCount + 1), 200);
+          }
+        }
       };
       
       attemptSpeak();
     } else {
-      console.error('speechSynthesis 지원되지 않음');
+      console.error('[TTS] speechSynthesis 지원되지 않음');
     }
   };
 
@@ -816,8 +844,8 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
           )}
         </div>
         
-        {/* 남은 공간 채우기 */}
-        <div className="flex-1"></div>
+        {/* 최소 여백만 유지 */}
+        <div className="h-4"></div>
       </div>
 
       {/* Bottom Button - 아이폰 최적화 */}
@@ -835,7 +863,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
           <Button 
             onClick={handleCheck} 
             disabled={selectedWords.length === 0}
-            className={`w-full py-3 text-base font-bold transition-all ${
+            className={`w-full max-w-xs mx-auto py-3 text-base font-bold transition-all ${
               selectedWords.length === 0
                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 : 'bg-green-500 hover:bg-green-600 text-white'
@@ -846,7 +874,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         ) : (
           <Button 
             onClick={levelCompleted ? onBack : handleNext} 
-            className="w-full py-3 text-base font-bold bg-green-500 hover:bg-green-600 text-white"
+            className="w-full max-w-xs mx-auto py-3 text-base font-bold bg-green-500 hover:bg-green-600 text-white"
           >
             {levelCompleted ? '완료' : '계속'}
           </Button>
