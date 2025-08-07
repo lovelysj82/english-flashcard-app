@@ -585,19 +585,51 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
       await new Promise(resolve => setTimeout(resolve, 100));
       
     } else if (isIOS && !isKakaoInApp) {
-      console.log('🍎 [iOS] Safari/Chrome 감지 - iOS 전용 오디오 활성화');
+      console.log('🍎 [iOS] Safari/Chrome 감지 - 더 강력한 오디오 활성화');
       
-      // iOS Safari/Chrome에서 Speech Synthesis 활성화를 위한 특별 처리
+      // iOS Safari/Chrome에서 오디오 활성화를 위한 강화된 처리
       try {
-        // iOS에서는 사용자 제스처가 더욱 엄격하므로 즉시 speechSynthesis 호출
-        if ('speechSynthesis' in window) {
-          // iOS speechSynthesis 준비 상태 확인
-          speechSynthesis.cancel(); // 이전 음성 정리
+        // 1. Web Audio API 강제 활성화 (iOS 필수)
+        if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+          const AudioContextClass = AudioContext || webkitAudioContext;
+          const audioContext = new AudioContextClass();
           
-          // iOS에서는 getVoices()가 비동기적으로 로드되므로 대기
+          if (audioContext.state === 'suspended') {
+            console.log('🍎 [iOS] 오디오 컨텍스트 강제 활성화');
+            await audioContext.resume();
+            console.log(`✅ [iOS] 오디오 컨텍스트 상태: ${audioContext.state}`);
+          }
+          
+          audioContext.close();
+        }
+        
+        // 2. 더미 오디오 재생으로 iOS 오디오 시스템 깨우기
+        const dummyAudio = new Audio();
+        dummyAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAACAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
+        dummyAudio.volume = 0.01;
+        
+        try {
+          await dummyAudio.play();
+          console.log('✅ [iOS] 더미 오디오 재생 성공');
+        } catch (audioError) {
+          console.log('🍎 [iOS] 더미 오디오 재생 실패 (예상됨)');
+        }
+        
+        // 3. Speech Synthesis 강제 초기화
+        if ('speechSynthesis' in window) {
+          speechSynthesis.cancel();
+          
+          // iOS에서 음성 엔진 강제 로딩
           const voices = speechSynthesis.getVoices();
           if (voices.length === 0) {
-            console.log('🍎 [iOS] 음성 엔진 로딩 대기 중...');
+            console.log('🍎 [iOS] 음성 엔진 강제 로딩...');
+            
+            // 더미 utterance로 음성 엔진 활성화
+            const dummyUtterance = new SpeechSynthesisUtterance(' ');
+            dummyUtterance.volume = 0.01;
+            dummyUtterance.rate = 10; // 빠르게 처리
+            speechSynthesis.speak(dummyUtterance);
+            
             await new Promise(resolve => {
               const checkVoices = () => {
                 const newVoices = speechSynthesis.getVoices();
@@ -608,14 +640,14 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
                 }
               };
               speechSynthesis.onvoiceschanged = () => resolve(speechSynthesis.getVoices());
-              checkVoices();
+              setTimeout(() => resolve([]), 2000); // 2초 타임아웃
             });
           }
           
-          console.log('✅ [iOS] Speech Synthesis 준비 완료');
+          console.log('✅ [iOS] Speech Synthesis 강화 활성화 완료');
         }
       } catch (iosError) {
-        console.warn('⚠️ [iOS] 음성 시스템 준비 실패:', iosError);
+        console.warn('⚠️ [iOS] 강화 오디오 시스템 준비 실패:', iosError);
       }
     }
     
@@ -684,7 +716,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         }
         
         // 갤럭시 최적화 설정
-        utterance.lang = 'en-US';
+      utterance.lang = 'en-US';
         utterance.rate = 0.9;
         utterance.pitch = 1.0;
         utterance.volume = 1.0;
@@ -755,7 +787,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         };
         
         // 갤럭시에서 사용자 제스처 보장하며 즉시 실행
-        speechSynthesis.speak(utterance);
+      speechSynthesis.speak(utterance);
         console.log(`🚀 [갤럭시] speechSynthesis.speak() 호출 완료`);
         
         // 갤럭시 재생 상태 모니터링
@@ -844,15 +876,15 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
     : 0;
 
   return (
-    <div className="h-screen bg-background flex flex-col" style={{ maxHeight: '100vh', minHeight: '100vh' }}>
-      {/* Header */}
+    <div className="min-h-screen bg-background flex flex-col p-2">
+        {/* Header */}
       <div className="flex items-center justify-between p-1 border-b flex-shrink-0">
         <Button variant="ghost" size="icon" onClick={() => {
           console.log('SentenceCompletionMode: 뒤로가기 버튼 클릭');
           onBack();
         }}>
           <ArrowLeft className="w-5 h-5" />
-        </Button>
+          </Button>
         <div className="flex-1 mx-3">
           <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
             <div 
@@ -867,7 +899,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col p-1 max-w-sm mx-auto w-full" style={{ minHeight: '0', maxHeight: 'calc(100vh - 80px)', overflow: 'auto' }}>
+      <div className="flex-1 max-w-sm mx-auto w-full">
         {/* Korean Sentence */}
         <div className="text-center mb-6">
           <p className="text-xl font-semibold text-gray-800">
@@ -949,7 +981,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
         </div>
 
         {/* Word Selection Buttons */}
-        <div className="flex flex-wrap gap-1 justify-center mb-3">
+                      <div className="flex flex-wrap gap-0.5 justify-center mb-3">
           {allWords.map((word, index) => {
             const isSelected = selectedIndices.includes(index);
             return (
@@ -967,7 +999,7 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
               </Button>
             );
           })}
-        </div>
+            </div>
 
         {/* Result Display - 슬라이드 애니메이션 */}
         <div className={`transition-all duration-500 ease-in-out overflow-hidden ${
@@ -993,48 +1025,40 @@ export function SentenceCompletionMode({ sentences, selectedLevel, onBack }: Sen
                     <p className="text-sm font-medium text-gray-800 mb-1">{currentSentence.englishSentence}</p>
                   )}
                   {isCorrect && (
-                    <p className="text-sm font-medium text-green-700">정답입니다!</p>
+                    <div>
+                      <p className="text-sm font-medium text-green-700 mb-2">정답입니다!</p>
+                      <p className="text-sm font-medium text-gray-800">{currentSentence.englishSentence}</p>
+              </div>
                   )}
-                </div>
+            </div>
               </div>
             </div>
           )}
-        </div>
-        
-        {/* 버튼을 화면에 보이도록 여백 제거 */}
-      </div>
+            </div>
 
-      {/* Bottom Button - 아이폰 최적화 */}
-      <div 
-        className="flex-shrink-0 bg-background border-t border-gray-200 flex items-center justify-center"
-        style={{ 
-          paddingLeft: '16px', 
-          paddingRight: '16px', 
-          paddingTop: '2px',
-          paddingBottom: 'max(2px, env(safe-area-inset-bottom))',
-          minHeight: '40px'
-        }}
-      >
-        {!showResult ? (
-          <Button 
-            onClick={handleCheck} 
-            disabled={selectedWords.length === 0}
-            className={`w-full max-w-xs mx-auto py-3 text-base font-bold transition-all ${
-              selectedWords.length === 0
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : 'bg-green-500 hover:bg-green-600 text-white'
-            }`}
-          >
-            확인
-          </Button>
-        ) : (
-          <Button 
-            onClick={levelCompleted ? onBack : handleNext} 
-            className="w-full max-w-xs mx-auto py-3 text-base font-bold bg-green-500 hover:bg-green-600 text-white"
-          >
-            {levelCompleted ? '완료' : '계속'}
-          </Button>
-        )}
+        {/* 확인/계속 버튼 - 컨텐츠 바로 아래 자연스럽게 배치 */}
+        <div className="text-center mt-6 mb-8">
+          {!showResult ? (
+              <Button 
+                onClick={handleCheck} 
+              disabled={selectedWords.length === 0}
+              className={`w-full max-w-xs mx-auto py-3 text-base font-bold transition-all ${
+                selectedWords.length === 0
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-green-500 hover:bg-green-600 text-white'
+              }`}
+              >
+                확인
+              </Button>
+          ) : (
+            <Button 
+              onClick={levelCompleted ? onBack : handleNext} 
+              className="w-full max-w-xs mx-auto py-3 text-base font-bold bg-green-500 hover:bg-green-600 text-white"
+            >
+              {levelCompleted ? '완료' : '계속'}
+            </Button>
+          )}
+              </div>
       </div>
     </div>
   );

@@ -56,59 +56,80 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
   // Speech Recognition setup
   const [recognition, setRecognition] = useState<any>(null);
   const [micPermissionGranted, setMicPermissionGranted] = useState<boolean | null>(null);
+  const [permissionChecked, setPermissionChecked] = useState(false);
 
   useEffect(() => {
     const initializeSpeechRecognition = async () => {
-      // 갤럭시 마이크 권한 미리 확인
-      try {
-        console.log('🎤 [갤럭시] 마이크 권한 확인 중...');
-        
-        if (navigator.permissions) {
-          const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
-          console.log(`🎤 [갤럭시] 마이크 권한 상태: ${permission.state}`);
+      // 갤럭시 카카오톡 마이크 권한 확인 (한 번만)
+      if (!permissionChecked) {
+        try {
+          console.log('🎤 [갤럭시 카톡] 마이크 권한 확인 중...');
           
-          if (permission.state === 'granted') {
-            setMicPermissionGranted(true);
-          } else if (permission.state === 'denied') {
-            setMicPermissionGranted(false);
-            console.error('🚫 [갤럭시] 마이크 권한이 거부되었습니다.');
-            return;
+          // 브라우저 환경 감지
+          const userAgent = navigator.userAgent.toLowerCase();
+          const isKakaoInApp = userAgent.includes('kakaotalk');
+          const isAndroid = userAgent.includes('android');
+          
+          if (isKakaoInApp && isAndroid) {
+            console.log('🤖 [갤럭시 카톡] 인앱 브라우저 감지 - 권한 캐싱');
+            
+            // localStorage에서 권한 상태 확인
+            const cachedPermission = localStorage.getItem('kakao_mic_permission');
+            if (cachedPermission === 'granted') {
+              console.log('✅ [갤럭시 카톡] 캐시된 권한 사용');
+              setMicPermissionGranted(true);
+              setPermissionChecked(true);
+              return;
+            }
+            
+            // 권한 상태 직접 확인 (한 번만)
+            try {
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              stream.getTracks().forEach(track => track.stop());
+              setMicPermissionGranted(true);
+              localStorage.setItem('kakao_mic_permission', 'granted');
+              console.log('✅ [갤럭시 카톡] 마이크 권한 확인 및 캐싱 완료');
+            } catch (permError) {
+              setMicPermissionGranted(false);
+              localStorage.setItem('kakao_mic_permission', 'denied');
+              console.error('🚫 [갤럭시 카톡] 마이크 권한 거부:', permError);
+            }
+          } else {
+            // 일반 브라우저 권한 확인
+            if (navigator.permissions) {
+              const permission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
+              console.log(`🎤 [일반] 마이크 권한 상태: ${permission.state}`);
+              setMicPermissionGranted(permission.state === 'granted');
+              
+              // 권한 상태 변경 감지
+              permission.onchange = () => {
+                console.log(`🎤 [일반] 마이크 권한 변경: ${permission.state}`);
+                setMicPermissionGranted(permission.state === 'granted');
+              };
+            } else {
+              setMicPermissionGranted(null); // 권한 상태를 알 수 없음
+            }
           }
           
-          // 권한 상태 변경 감지
-          permission.onchange = () => {
-            console.log(`🎤 [갤럭시] 마이크 권한 변경: ${permission.state}`);
-            setMicPermissionGranted(permission.state === 'granted');
-          };
-        } else {
-          // 권한 API가 없는 경우 직접 테스트
-          console.log('🎤 [갤럭시] 권한 API 없음 - 직접 테스트');
-          try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            stream.getTracks().forEach(track => track.stop());
-            setMicPermissionGranted(true);
-            console.log('✅ [갤럭시] 마이크 권한 테스트 성공');
-          } catch (error) {
-            setMicPermissionGranted(false);
-            console.error('🚫 [갤럭시] 마이크 권한 테스트 실패:', error);
-          }
+          setPermissionChecked(true);
+        } catch (error) {
+          console.error('❌ [권한 확인] 오류:', error);
+          setMicPermissionGranted(null);
+          setPermissionChecked(true);
         }
-      } catch (error) {
-        console.error('❌ [갤럭시] 권한 확인 오류:', error);
-        setMicPermissionGranted(null); // 권한 상태를 알 수 없음
       }
 
       // Speech Recognition 초기화
-      if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        const recognitionInstance = new SpeechRecognition();
+    if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      const recognitionInstance = new SpeechRecognition();
         
         // 갤럭시 최적화 설정
         recognitionInstance.continuous = true;
         recognitionInstance.interimResults = true;
-        recognitionInstance.lang = 'en-US';
+      recognitionInstance.lang = 'en-US';
 
-        recognitionInstance.onresult = (event) => {
+      recognitionInstance.onresult = (event) => {
           let finalTranscript = '';
           let interimTranscript = '';
           
@@ -127,9 +148,9 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
             setSpokenText(resultText.trim());
             console.log(`🎤 [갤럭시] 음성 인식: "${resultText.trim()}" (최종: ${!!finalTranscript})`);
           }
-        };
+      };
 
-        recognitionInstance.onerror = (event) => {
+      recognitionInstance.onerror = (event) => {
           console.error(`🚫 [갤럭시] 음성 인식 오류: ${event.error}`);
           
           if (event.error === 'not-allowed') {
@@ -138,16 +159,16 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
             console.error('📱 [갤럭시] 해결: 브라우저 설정 → 사이트 권한 → 마이크 허용');
           }
           
-          setIsListening(false);
-        };
+        setIsListening(false);
+      };
 
-        recognitionInstance.onend = () => {
+      recognitionInstance.onend = () => {
           console.log('🔚 [갤럭시] 음성 인식 종료');
-          setIsListening(false);
-        };
+        setIsListening(false);
+      };
 
-        setRecognition(recognitionInstance);
-      } else {
+      setRecognition(recognitionInstance);
+    } else {
         console.error('❌ [갤럭시] Speech Recognition API 지원되지 않음');
       }
     };
@@ -171,7 +192,7 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
       
       try {
         console.log('🎤 [갤럭시] 음성 인식 시작');
-        recognition.start();
+      recognition.start();
       } catch (error) {
         console.error('❌ [갤럭시] 음성 인식 시작 오류:', error);
         setIsListening(false);
@@ -287,7 +308,7 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
     
     setIsCorrect(correct);
     setShowResult(true);
-    
+
     if (!correct) {
       setWrongAnswers(prev => {
         const newSet = new Set([...prev, currentSentence.id]);
@@ -519,19 +540,51 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
       await new Promise(resolve => setTimeout(resolve, 100));
       
     } else if (isIOS && !isKakaoInApp) {
-      console.log('🍎 [iOS] Safari/Chrome 감지 - iOS 전용 오디오 활성화');
+      console.log('🍎 [iOS] Safari/Chrome 감지 - 더 강력한 오디오 활성화');
       
-      // iOS Safari/Chrome에서 Speech Synthesis 활성화를 위한 특별 처리
+      // iOS Safari/Chrome에서 오디오 활성화를 위한 강화된 처리
       try {
-        // iOS에서는 사용자 제스처가 더욱 엄격하므로 즉시 speechSynthesis 호출
-        if ('speechSynthesis' in window) {
-          // iOS speechSynthesis 준비 상태 확인
-          speechSynthesis.cancel(); // 이전 음성 정리
+        // 1. Web Audio API 강제 활성화 (iOS 필수)
+        if (typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined') {
+          const AudioContextClass = AudioContext || webkitAudioContext;
+          const audioContext = new AudioContextClass();
           
-          // iOS에서는 getVoices()가 비동기적으로 로드되므로 대기
+          if (audioContext.state === 'suspended') {
+            console.log('🍎 [iOS] 오디오 컨텍스트 강제 활성화');
+            await audioContext.resume();
+            console.log(`✅ [iOS] 오디오 컨텍스트 상태: ${audioContext.state}`);
+          }
+          
+          audioContext.close();
+        }
+        
+        // 2. 더미 오디오 재생으로 iOS 오디오 시스템 깨우기
+        const dummyAudio = new Audio();
+        dummyAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAACAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==';
+        dummyAudio.volume = 0.01;
+        
+        try {
+          await dummyAudio.play();
+          console.log('✅ [iOS] 더미 오디오 재생 성공');
+        } catch (audioError) {
+          console.log('🍎 [iOS] 더미 오디오 재생 실패 (예상됨)');
+        }
+        
+        // 3. Speech Synthesis 강제 초기화
+        if ('speechSynthesis' in window) {
+          speechSynthesis.cancel();
+          
+          // iOS에서 음성 엔진 강제 로딩
           const voices = speechSynthesis.getVoices();
           if (voices.length === 0) {
-            console.log('🍎 [iOS] 음성 엔진 로딩 대기 중...');
+            console.log('🍎 [iOS] 음성 엔진 강제 로딩...');
+            
+            // 더미 utterance로 음성 엔진 활성화
+            const dummyUtterance = new SpeechSynthesisUtterance(' ');
+            dummyUtterance.volume = 0.01;
+            dummyUtterance.rate = 10; // 빠르게 처리
+            speechSynthesis.speak(dummyUtterance);
+            
             await new Promise(resolve => {
               const checkVoices = () => {
                 const newVoices = speechSynthesis.getVoices();
@@ -542,14 +595,14 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
                 }
               };
               speechSynthesis.onvoiceschanged = () => resolve(speechSynthesis.getVoices());
-              checkVoices();
+              setTimeout(() => resolve([]), 2000); // 2초 타임아웃
             });
           }
           
-          console.log('✅ [iOS] Speech Synthesis 준비 완료');
+          console.log('✅ [iOS] Speech Synthesis 강화 활성화 완료');
         }
       } catch (iosError) {
-        console.warn('⚠️ [iOS] 음성 시스템 준비 실패:', iosError);
+        console.warn('⚠️ [iOS] 강화 오디오 시스템 준비 실패:', iosError);
       }
     }
     
@@ -618,7 +671,7 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
         }
         
         // 갤럭시 최적화 설정
-        utterance.lang = 'en-US';
+      utterance.lang = 'en-US';
         utterance.rate = 0.9;
         utterance.pitch = 1.0;
         utterance.volume = 1.0;
@@ -689,7 +742,7 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
         };
         
         // 갤럭시에서 사용자 제스처 보장하며 즉시 실행
-        speechSynthesis.speak(utterance);
+      speechSynthesis.speak(utterance);
         console.log(`🚀 [갤럭시] speechSynthesis.speak() 호출 완료`);
         
         // 갤럭시 재생 상태 모니터링
@@ -794,7 +847,7 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
     : 0;
 
   return (
-    <div className="h-screen bg-background flex flex-col" style={{ maxHeight: '100vh', minHeight: '100vh' }}>
+    <div className="min-h-screen bg-background flex flex-col p-2">
       {/* Header - SentenceCompletionMode와 동일한 스타일 */}
       <div className="flex items-center justify-between p-1 border-b flex-shrink-0">
         <Button variant="ghost" size="icon" onClick={() => {
@@ -802,7 +855,7 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
           onBack();
         }}>
           <ArrowLeft className="w-5 h-5" />
-        </Button>
+          </Button>
         <div className="flex-1 mx-3">
           <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
             <div 
@@ -813,11 +866,11 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
         </div>
         <span className="text-xs font-medium text-gray-600">
           {currentSentenceIndex + 1}/{currentSentenceList.length}
-        </span>
-      </div>
+              </span>
+            </div>
 
       {/* Main Content - SentenceCompletionMode와 동일한 스타일 */}
-      <div className="flex-1 flex flex-col p-1 max-w-sm mx-auto w-full" style={{ minHeight: '0', maxHeight: 'calc(100vh - 80px)', overflow: 'auto' }}>
+      <div className="flex-1 max-w-sm mx-auto w-full">
         {/* Korean Sentence */}
         <div className="text-center mb-6">
           <p className="text-xl font-semibold text-gray-800">
@@ -872,40 +925,40 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
             ) : (
               <div className="flex flex-wrap justify-center items-end gap-1">
                 {generateWordUnderlines(currentSentence.englishSentence)}
-              </div>
+            </div>
             )}
-          </div>
-        </div>
+            </div>
+            </div>
 
         {/* Voice Recognition Button */}
         <div className="text-center mb-6">
           <div className="flex flex-col items-center gap-2">
-            <Button
-              onClick={isListening ? stopListening : startListening}
+              <Button
+                onClick={isListening ? stopListening : startListening}
               className={`w-20 h-20 rounded-full ${
                 isListening 
                   ? 'bg-red-500 hover:bg-red-600' 
                   : 'bg-blue-500 hover:bg-blue-600'
               } text-white transition-all duration-200`}
               disabled={showResult}
-            >
-              {isListening ? (
-                <MicOff className="w-8 h-8" />
-              ) : (
-                <Mic className="w-8 h-8" />
-              )}
-            </Button>
+              >
+                {isListening ? (
+                  <MicOff className="w-8 h-8" />
+                ) : (
+                  <Mic className="w-8 h-8" />
+                )}
+              </Button>
                             <p className="text-sm text-gray-600">
                   {isListening ? '마이크를 다시 눌러서 종료' : ''}
                 </p>
-          </div>
-        </div>
+                </div>
+            </div>
 
         {/* Result Display - 슬라이드 애니메이션으로 표시 */}
-        {showResult && (
+            {showResult && (
           <div 
             className={`mb-4 p-4 rounded-lg border-2 transition-all duration-300 ${
-              isCorrect 
+                isCorrect 
                 ? 'bg-green-50 border-green-200' 
                 : 'bg-red-50 border-red-200'
             }`}
@@ -915,19 +968,19 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
               overflow: 'hidden'
             }}
           >
-            <div className="flex items-center gap-2 mb-2">
-              {isCorrect ? (
+                <div className="flex items-center gap-2 mb-2">
+                  {isCorrect ? (
                 <CheckCircle className="w-5 h-5 text-green-600" />
-              ) : (
+                  ) : (
                 <XCircle className="w-5 h-5 text-red-600" />
-              )}
+                  )}
               <span className={`font-medium ${isCorrect ? 'text-green-800' : 'text-red-800'}`}>
-                {isCorrect ? '훌륭합니다!' : '다시 시도해보세요'}
-              </span>
-            </div>
-            
+                    {isCorrect ? '훌륭합니다!' : '다시 시도해보세요'}
+                  </span>
+                </div>
+                
             {!isCorrect && (
-              <div className="mb-3">
+                <div className="mb-3">
                 <p className="text-sm text-gray-600 mb-1">정답:</p>
                 <div className="flex items-center gap-3">
                   <Button
@@ -940,9 +993,9 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
                   </Button>
                   <p className="text-lg font-semibold text-gray-800">{currentSentence.englishSentence}</p>
                 </div>
-              </div>
-            )}
-
+                  </div>
+                )}
+                
             {isCorrect && (
               <div className="flex items-center gap-3">
                 <Button
@@ -959,40 +1012,29 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
           </div>
         )}
         
-        {/* 버튼을 화면에 보이도록 여백 제거 */}
-      </div>
-
-      {/* Bottom Button - SentenceCompletionMode와 동일한 스타일 */}
-      <div 
-        className="flex-shrink-0 bg-background border-t border-gray-200 flex items-center justify-center"
-        style={{ 
-          paddingLeft: '16px', 
-          paddingRight: '16px', 
-          paddingTop: '2px',
-          paddingBottom: 'max(2px, env(safe-area-inset-bottom))',
-          minHeight: '40px'
-        }}
-      >
-        {!showResult ? (
-          <Button 
-            onClick={handleCheck} 
-            disabled={!spokenText.trim()}
-            className={`w-full max-w-xs mx-auto py-3 text-base font-bold transition-all ${
-              !spokenText.trim()
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                : 'bg-green-500 hover:bg-green-600 text-white'
-            }`}
-          >
-            확인
-          </Button>
-        ) : (
-          <Button 
-            onClick={levelCompleted ? onBack : handleNext} 
-            className="w-full max-w-xs mx-auto py-3 text-base font-bold bg-green-500 hover:bg-green-600 text-white"
-          >
-            {levelCompleted ? '완료' : '계속'}
-          </Button>
-        )}
+        {/* 확인/계속 버튼 - 컨텐츠 바로 아래 자연스럽게 배치 */}
+        <div className="text-center mt-6 mb-8">
+          {!showResult ? (
+            <Button 
+              onClick={handleCheck} 
+              disabled={!spokenText.trim()}
+              className={`w-full max-w-xs mx-auto py-3 text-base font-bold transition-all ${
+                !spokenText.trim()
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-green-500 hover:bg-green-600 text-white'
+              }`}
+            >
+              확인
+            </Button>
+          ) : (
+            <Button 
+              onClick={levelCompleted ? onBack : handleNext} 
+              className="w-full max-w-xs mx-auto py-3 text-base font-bold bg-green-500 hover:bg-green-600 text-white"
+            >
+              {levelCompleted ? '완료' : '계속'}
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -9,7 +9,7 @@ interface LearningModeSelectorProps {
 
 export function LearningModeSelector({ onSelectMode }: LearningModeSelectorProps) {
   return (
-    <div className="min-h-screen bg-background flex flex-col justify-center p-4">
+    <div className="min-h-screen bg-background flex flex-col p-4 pt-8">
       <div className="w-full max-w-sm mx-auto">
         {/* 앱 제목 */}
         <div className="text-center mb-4">
