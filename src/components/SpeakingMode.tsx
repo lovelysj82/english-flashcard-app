@@ -176,25 +176,182 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
     initializeSpeechRecognition();
   }, []);
 
-  const startListening = () => {
-    // 갤럭시 권한 확인
+  // 권한 설정 페이지 자동 열기 함수
+  const openPermissionSettings = () => {
+    const userAgent = navigator.userAgent.toLowerCase();
+    const isIOS = /iphone|ipad|ipod/.test(userAgent);
+    const isAndroid = /android/.test(userAgent);
+    const isKakaoInApp = userAgent.includes('kakaotalk');
+    
+    console.log('🔧 [권한 설정] 플랫폼별 설정 페이지 열기 시도');
+    
+    if (isIOS) {
+      // iOS: 설정 앱으로 이동
+      if (isKakaoInApp) {
+        // 카카오톡에서는 외부 브라우저로 안내
+        const message = `🎤 마이크 권한이 필요합니다!
+
+📱 카카오톡에서는 음성 인식이 제한됩니다.
+
+✅ 해결 방법:
+1. Safari 브라우저로 열어주세요
+2. 설정 → Safari → 마이크 허용
+
+또는
+
+⚙️ 설정 앱 → Safari → 마이크 허용
+
+설정 후 다시 시도해주세요!`;
+        alert(message);
+      } else {
+        // 일반 브라우저에서는 설정 앱으로 직접 이동 시도
+        try {
+          // iOS 설정 앱으로 이동 (Universal Links 사용)
+          window.location.href = 'App-Prefs:root=Privacy&path=MICROPHONE';
+        } catch (error) {
+          // 실패시 수동 안내
+          const message = `🎤 마이크 권한이 필요합니다!
+
+⚙️ 설정 방법:
+설정 앱 → 개인정보 보호 및 보안 → 마이크 → 술술영어 허용
+
+✅ 권한 허용 후 다시 시도해주세요!`;
+          alert(message);
+        }
+      }
+    } else if (isAndroid) {
+      // Android: 브라우저 설정 또는 앱 설정으로 이동
+      if (isKakaoInApp) {
+        // 카카오톡에서는 외부 브라우저로 안내
+        const message = `🎤 마이크 권한이 필요합니다!
+
+📱 카카오톡에서는 음성 인식이 제한됩니다.
+
+✅ 해결 방법:
+1. 삼성 인터넷 또는 Chrome으로 열어주세요
+2. 브라우저 설정 → 사이트 권한 → 마이크 허용
+
+설정 후 다시 시도해주세요!`;
+        alert(message);
+      } else {
+        // 일반 브라우저에서는 브라우저 설정으로 이동 시도
+        try {
+          // Chrome 설정 페이지로 이동
+          window.open('chrome://settings/content/microphone', '_blank');
+        } catch (error) {
+          // 실패시 수동 안내
+          const message = `🎤 마이크 권한이 필요합니다!
+
+⚙️ 설정 방법:
+브라우저 설정 → 사이트 권한 → 마이크 허용
+
+✅ 권한 허용 후 다시 시도해주세요!`;
+          alert(message);
+        }
+      }
+    } else {
+      // 기타 브라우저
+      const message = `🎤 마이크 권한이 필요합니다!
+
+⚙️ 설정 방법:
+브라우저 설정 → 사이트 권한 → 마이크 허용
+
+✅ 권한 허용 후 다시 시도해주세요!`;
+      alert(message);
+    }
+  };
+
+  const startListening = async () => {
+    // 권한이 거부된 경우
     if (micPermissionGranted === false) {
-      console.error('🚫 [갤럭시] 마이크 권한이 거부됨 - 음성 인식 불가');
-      alert('마이크 권한이 필요합니다.\n브라우저 설정 → 사이트 권한 → 마이크 허용으로 설정해주세요.');
-      return;
+      console.error('🚫 [권한] 마이크 권한이 거부됨 - 음성 인식 불가');
+      
+      // 먼저 권한 재요청 시도
+      try {
+        console.log('🔧 [권한] 마이크 권한 재요청 시도');
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        
+        // 권한 재요청 성공
+        console.log('✅ [권한] 마이크 권한 재요청 성공');
+        setMicPermissionGranted(true);
+        
+        // 권한이 허용되었으므로 음성 인식 시작
+        if (recognition) {
+          setSpokenText("");
+          setShowResult(false);
+          setIsEditing(false);
+          setIsListening(true);
+          
+          try {
+            console.log('🎤 [권한] 음성 인식 시작');
+            recognition.start();
+          } catch (error) {
+            console.error('❌ [권한] 음성 인식 시작 오류:', error);
+            setIsListening(false);
+          }
+        }
+        return;
+      } catch (permError) {
+        console.log('🚫 [권한] 마이크 권한 재요청 실패:', permError);
+        
+        // 권한 설정 페이지 자동 열기
+        openPermissionSettings();
+        return;
+      }
     }
 
-    if (recognition && micPermissionGranted !== false) {
+    // 권한이 null인 경우 (아직 확인하지 않은 경우)
+    if (micPermissionGranted === null) {
+      console.log('🔍 [권한] 마이크 권한 상태 확인 중...');
+      
+      try {
+        // 권한 상태 확인
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+        
+        // 권한 허용됨
+        console.log('✅ [권한] 마이크 권한 확인됨 - 허용');
+        setMicPermissionGranted(true);
+        
+        // 음성 인식 시작
+        if (recognition) {
+          setSpokenText("");
+          setShowResult(false);
+          setIsEditing(false);
+          setIsListening(true);
+          
+          try {
+            console.log('🎤 [권한] 음성 인식 시작');
+            recognition.start();
+          } catch (error) {
+            console.error('❌ [권한] 음성 인식 시작 오류:', error);
+            setIsListening(false);
+          }
+        }
+        return;
+      } catch (permError) {
+        console.log('🚫 [권한] 마이크 권한 확인 실패:', permError);
+        setMicPermissionGranted(false);
+        
+        // 권한 설정 페이지 자동 열기
+        openPermissionSettings();
+        return;
+      }
+    }
+    
+    // 권한이 허용된 경우 정상 시작
+    if (recognition && micPermissionGranted === true) {
       setSpokenText("");
       setShowResult(false);
       setIsEditing(false);
       setIsListening(true);
       
       try {
-        console.log('🎤 [갤럭시] 음성 인식 시작');
-      recognition.start();
+        console.log('🎤 [권한] 음성 인식 시작');
+        recognition.start();
       } catch (error) {
-        console.error('❌ [갤럭시] 음성 인식 시작 오류:', error);
+        console.error('❌ [권한] 음성 인식 시작 오류:', error);
         setIsListening(false);
       }
     }
