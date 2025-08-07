@@ -12,7 +12,7 @@ export function LearningModeSelector({ onSelectMode }: LearningModeSelectorProps
     <div className="min-h-screen bg-background flex flex-col justify-center p-4">
       <div className="w-full max-w-sm mx-auto">
         {/* 앱 제목 */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-4">
           <h1 className="text-3xl font-bold text-foreground mb-2">
             술술영어
           </h1>

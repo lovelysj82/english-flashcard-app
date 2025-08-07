@@ -472,21 +472,27 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
   };
 
   const speakText = async (text: string) => {
-    // 브라우저 환경 감지 (카카오톡 인앱 브라우저 특별 처리)
+    // 플랫폼/브라우저 환경 완전 감지
     const userAgent = navigator.userAgent.toLowerCase();
     const isKakaoInApp = userAgent.includes('kakaotalk');
     const isSamsungBrowser = userAgent.includes('samsungbrowser');
     const isAndroid = userAgent.includes('android');
+    const isIOS = /ipad|iphone|ipod/.test(userAgent);
+    const isSafari = userAgent.includes('safari') && !userAgent.includes('chrome');
+    const isChrome = userAgent.includes('chrome');
     
     console.log(`🎵 [TTS] 음성 재생 요청: "${text}"`);
-    console.log(`📱 [TTS] 브라우저 환경:`, {
+    console.log(`📱 [TTS] 플랫폼/브라우저 환경:`, {
       isKakaoInApp,
       isSamsungBrowser,
       isAndroid,
+      isIOS,
+      isSafari,
+      isChrome,
       userAgent: userAgent.substring(0, 100)
     });
     
-    // 카카오톡 인앱 브라우저 특별 처리
+    // 플랫폼별 오디오 시스템 활성화 전략
     if (isKakaoInApp) {
       console.log('📱 [카카오톡] 인앱 브라우저 감지 - 특별 처리 시작');
       
@@ -511,6 +517,40 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
       
       // 2. 강제 사용자 상호작용 대기 (카카오톡 필수)
       await new Promise(resolve => setTimeout(resolve, 100));
+      
+    } else if (isIOS && !isKakaoInApp) {
+      console.log('🍎 [iOS] Safari/Chrome 감지 - iOS 전용 오디오 활성화');
+      
+      // iOS Safari/Chrome에서 Speech Synthesis 활성화를 위한 특별 처리
+      try {
+        // iOS에서는 사용자 제스처가 더욱 엄격하므로 즉시 speechSynthesis 호출
+        if ('speechSynthesis' in window) {
+          // iOS speechSynthesis 준비 상태 확인
+          speechSynthesis.cancel(); // 이전 음성 정리
+          
+          // iOS에서는 getVoices()가 비동기적으로 로드되므로 대기
+          const voices = speechSynthesis.getVoices();
+          if (voices.length === 0) {
+            console.log('🍎 [iOS] 음성 엔진 로딩 대기 중...');
+            await new Promise(resolve => {
+              const checkVoices = () => {
+                const newVoices = speechSynthesis.getVoices();
+                if (newVoices.length > 0) {
+                  resolve(newVoices);
+                } else {
+                  setTimeout(checkVoices, 100);
+                }
+              };
+              speechSynthesis.onvoiceschanged = () => resolve(speechSynthesis.getVoices());
+              checkVoices();
+            });
+          }
+          
+          console.log('✅ [iOS] Speech Synthesis 준비 완료');
+        }
+      } catch (iosError) {
+        console.warn('⚠️ [iOS] 음성 시스템 준비 실패:', iosError);
+      }
     }
     
     // 안드로이드/갤럭시 오디오 컨텍스트 활성화
@@ -593,19 +633,42 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
         };
         
         utterance.onerror = (event) => {
-          const browserType = isKakaoInApp ? '카카오톡' : (isSamsungBrowser ? '삼성브라우저' : '갤럭시');
+          let browserType = '브라우저';
+          if (isKakaoInApp) browserType = '카카오톡';
+          else if (isSamsungBrowser) browserType = '삼성브라우저';
+          else if (isIOS && isSafari) browserType = 'iOS Safari';
+          else if (isIOS && isChrome) browserType = 'iOS Chrome';
+          else if (isAndroid) browserType = '안드로이드';
+          
           console.error(`❌ [${browserType}] TTS 오류: ${event.error}`);
           
           if (event.error === 'not-allowed') {
             console.error(`🚫 [${browserType}] 오디오 권한이 거부되었습니다.`);
             
             if (isKakaoInApp) {
-              console.error('📱 [카카오톡] 해결방법:');
-              console.error('   1. 카카오톡 설정 → 일반 → 인앱 브라우저 사용 OFF');
-              console.error('   2. 또는 "외부 브라우저에서 열기" 사용');
-              console.error('   3. 삼성 인터넷이나 Chrome으로 직접 접속');
-              alert('🔊 카카오톡에서 음성이 재생되지 않습니다.\n\n해결방법:\n1. 우상단 ⋯ → "외부 브라우저에서 열기"\n2. 삼성 인터넷이나 Chrome 사용\n\n(카카오톡 인앱 브라우저는 음성 재생 제한이 있습니다)');
+              if (isIOS) {
+                // iOS 카카오톡: 음성 재생 가능하므로 다른 문제일 수 있음
+                console.error('🍎 [iOS 카카오톡] 해결방법:');
+                console.error('   1. 카카오톡 앱 설정 → 소리/진동 확인');
+                console.error('   2. iOS 설정 → 카카오톡 → 권한 확인');
+                console.error('   3. 카카오톡 앱 재시작');
+                alert('🔊 음성 재생에 문제가 있습니다.\n\n해결방법:\n1. 카카오톡 설정에서 소리/진동 확인\n2. iOS 설정에서 카카오톡 권한 확인\n3. 카카오톡 앱 재시작');
+              } else {
+                // Android 카카오톡: 외부 브라우저 권장
+                console.error('🤖 [안드로이드 카카오톡] 해결방법:');
+                console.error('   1. "외부 브라우저에서 열기" 사용');
+                console.error('   2. 삼성 인터넷이나 Chrome으로 직접 접속');
+                alert('🔊 카카오톡에서 음성이 재생되지 않습니다.\n\n해결방법:\n1. 우상단 ⋯ → "외부 브라우저에서 열기"\n2. 삼성 인터넷이나 Chrome 사용\n\n(안드로이드 카카오톡은 음성 재생 제한이 있습니다)');
+              }
+            } else if (isIOS) {
+              // iOS Safari/Chrome: 설정 안내
+              console.error('🍎 [iOS] 해결방법:');
+              console.error('   1. iOS 설정 → Safari → 고급 → 웹사이트 데이터');
+              console.error('   2. 또는 브라우저 새로고침 후 재시도');
+              console.error('   3. 다른 브라우저(Chrome/Edge) 사용');
+              alert('🔊 iOS에서 음성 재생 권한이 필요합니다.\n\n해결방법:\n1. 브라우저 새로고침 후 재시도\n2. iOS 설정에서 Safari 권한 확인\n3. Chrome이나 Edge 브라우저 사용');
             } else {
+              // Android 브라우저: 일반 권한 안내
               console.error(`📱 [${browserType}] 해결방법:`);
               console.error('   1. 브라우저 주소창 옆 🔒 아이콘 클릭');
               console.error('   2. 소리 권한을 "허용"으로 변경');
@@ -617,8 +680,10 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
           } else if (event.error === 'synthesis-failed') {
             console.error(`🔧 [${browserType}] 음성 합성 실패`);
             
-            if (isKakaoInApp) {
-              console.error('💡 [카카오톡] 인앱 브라우저 제한 - 외부 브라우저 사용 권장');
+            if (isKakaoInApp && isAndroid) {
+              console.error('💡 [안드로이드 카카오톡] 인앱 브라우저 제한 - 외부 브라우저 사용 권장');
+            } else if (isIOS && !isKakaoInApp) {
+              console.error('💡 [iOS] 음성 엔진 초기화 실패 - 재시도 권장');
             }
           }
         };
@@ -752,7 +817,7 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
       </div>
 
       {/* Main Content - SentenceCompletionMode와 동일한 스타일 */}
-      <div className="flex-1 flex flex-col p-1 max-w-sm mx-auto w-full" style={{ minHeight: '0', maxHeight: 'calc(100vh - 110px)', overflow: 'auto' }}>
+      <div className="flex-1 flex flex-col p-1 max-w-sm mx-auto w-full" style={{ minHeight: '0', maxHeight: 'calc(100vh - 80px)', overflow: 'auto' }}>
         {/* Korean Sentence */}
         <div className="text-center mb-6">
           <p className="text-xl font-semibold text-gray-800">
@@ -830,9 +895,9 @@ export function SpeakingMode({ sentences, selectedLevel, onBack }: SpeakingModeP
                 <Mic className="w-8 h-8" />
               )}
             </Button>
-            <p className="text-sm text-gray-600">
-              {isListening ? '마이크를 다시 눌러서 종료' : '마이크 버튼을 클릭하고 말해보세요'}
-            </p>
+                            <p className="text-sm text-gray-600">
+                  {isListening ? '마이크를 다시 눌러서 종료' : ''}
+                </p>
           </div>
         </div>
 

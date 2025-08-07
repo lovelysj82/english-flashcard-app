@@ -8,9 +8,32 @@ import { Sentence } from "@/data/sampleSentences";
 import { Card, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
 
+// URL 파라미터에서 상태 추출
+const getStateFromURL = () => {
+  const params = new URLSearchParams(window.location.search);
+  const mode = params.get('mode') as LearningMode | null;
+  const level = params.get('level') ? parseInt(params.get('level')!) : null;
+  
+  console.log('🔗 URL에서 상태 복원:', { mode, level });
+  return { mode, level };
+};
+
+// 상태를 URL에 반영
+const updateURL = (mode: LearningMode | null, level: number | null) => {
+  const params = new URLSearchParams();
+  if (mode) params.set('mode', mode);
+  if (level) params.set('level', level.toString());
+  
+  const newURL = `${window.location.pathname}${params.toString() ? '?' + params.toString() : ''}`;
+  window.history.replaceState({ mode, level }, '', newURL);
+  console.log('🔗 URL 업데이트:', newURL);
+};
+
 const Index = () => {
-  const [selectedMode, setSelectedMode] = useState<LearningMode | null>(null);
-  const [selectedLevel, setSelectedLevel] = useState<number | null>(null);
+  // URL에서 초기 상태 복원
+  const { mode: initialMode, level: initialLevel } = getStateFromURL();
+  const [selectedMode, setSelectedMode] = useState<LearningMode | null>(initialMode);
+  const [selectedLevel, setSelectedLevel] = useState<number | null>(initialLevel);
   const [sentences, setSentences] = useState<Sentence[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dataError, setDataError] = useState<string | null>(null);
@@ -25,16 +48,19 @@ const Index = () => {
         setSelectedMode(event.state.mode || null);
         setSelectedLevel(event.state.level || null);
       } else {
-        // History state가 없으면 홈으로
-        setSelectedMode(null);
-        setSelectedLevel(null);
+        // History state가 없으면 URL에서 상태 복원 시도
+        const { mode, level } = getStateFromURL();
+        setSelectedMode(mode);
+        setSelectedLevel(level);
       }
     };
 
-    // 초기 상태를 history에 추가
+    // 초기 상태를 history에 추가 (URL에서 복원된 상태 포함)
     if (typeof window !== 'undefined') {
-      window.history.replaceState({ mode: null, level: null }, '', window.location.href);
+      window.history.replaceState({ mode: selectedMode, level: selectedLevel }, '', window.location.href);
       window.addEventListener('popstate', handlePopState);
+      
+      console.log('🔗 초기 상태 설정 완료:', { selectedMode, selectedLevel });
     }
 
     return () => {
@@ -42,7 +68,7 @@ const Index = () => {
         window.removeEventListener('popstate', handlePopState);
       }
     };
-  }, []);
+  }, []); // 빈 의존성 배열로 한 번만 실행
 
   // 데이터 로딩
   useEffect(() => {
@@ -94,9 +120,11 @@ const Index = () => {
   const handleModeSelect = (mode: LearningMode) => {
     console.log(`Index: 모드 선택됨 - ${mode}`);
     setSelectedMode(mode);
+    setSelectedLevel(null); // 레벨 초기화
     console.log(`Index: selectedMode 상태 업데이트됨 - ${mode}`);
     
-    // 🔙 History에 모드 선택 상태 추가
+    // 🔗 URL과 History 모두 업데이트
+    updateURL(mode, null);
     window.history.pushState({ mode, level: null }, '', window.location.href);
     console.log(`📌 History 추가: mode=${mode}, level=null`);
   };
@@ -105,7 +133,8 @@ const Index = () => {
     console.log(`Index: 레벨 ${level} 선택됨`);
     setSelectedLevel(level);
     
-    // 🔙 History에 레벨 선택 상태 추가
+    // 🔗 URL과 History 모두 업데이트
+    updateURL(selectedMode, level);
     window.history.pushState({ mode: selectedMode, level }, '', window.location.href);
     console.log(`📌 History 추가: mode=${selectedMode}, level=${level}`);
   };
@@ -114,7 +143,8 @@ const Index = () => {
     setSelectedMode(null);
     setSelectedLevel(null);
     
-    // 🔙 History 뒤로가기 또는 홈 상태로 변경
+    // 🔗 URL과 History 모두 업데이트 (홈으로)
+    updateURL(null, null);
     window.history.pushState({ mode: null, level: null }, '', window.location.href);
     console.log(`📌 History 추가: mode=null, level=null (홈)`);
   };
@@ -123,7 +153,8 @@ const Index = () => {
     console.log('Index: handleBackToLevelSelect 호출 - 레벨 선택 페이지로 이동');
     setSelectedLevel(null);
     
-    // 🔙 History에 레벨 선택 페이지 상태 추가
+    // 🔗 URL과 History 모두 업데이트 (레벨 선택으로)
+    updateURL(selectedMode, null);
     window.history.pushState({ mode: selectedMode, level: null }, '', window.location.href);
     console.log(`📌 History 추가: mode=${selectedMode}, level=null (레벨선택)`);
   };
